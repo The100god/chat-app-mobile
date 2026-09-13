@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "Chugli",
+    "slug": "chugli",
+    "version": "1.0.0",
+    "description": "Chugli - A real-time chat application",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "chugli",
+    "primaryColor": "#8b5cf6",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chugli.chat",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Chugli needs access to your camera to capture photos for chat messages and profile picture.",
+        "NSPhotoLibraryUsageDescription": "Chugli needs access to your photo library to select photos and videos for sharing.",
+        "NSMicrophoneUsageDescription": "Chugli needs access to your microphone to record audio messages."
+      }
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "resize",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.chugli.chat",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/icon.png",
+      "bundler": "metro",
+      "name": "Chugli",
+      "shortName": "Chugli",
+      "description": "Chugli - A real-time chat application",
+      "themeColor": "#0f172a",
+      "backgroundColor": "#0f172a",
+      "display": "standalone"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Chugli to access your photos to share in chat."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Chugli to access your microphone for audio messages."
+        }
+      ],
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
