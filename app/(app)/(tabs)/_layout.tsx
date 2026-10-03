@@ -2,12 +2,13 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { MessageSquare, Users, Gamepad2, UserPlus, Settings } from 'lucide-react-native';
 import { useAtom } from 'jotai';
-import { unreadCountAtom, groupUnreadTotalAtom } from '../../../src/states/States';
+import { friendUnreadTotalAtom, groupUnreadTotalAtom, friendRequestsCountAtom } from '../../../src/states/States';
 import { useTheme } from '../../../src/context/ThemeContext';
 
 export default function TabsLayout() {
-  const [unreadCount] = useAtom(unreadCountAtom);
+  const [friendUnreadTotal] = useAtom(friendUnreadTotalAtom);
   const [groupUnreadTotal] = useAtom(groupUnreadTotalAtom);
+  const [friendRequestsCount] = useAtom(friendRequestsCountAtom);
   const { theme } = useTheme();
 
   return (
@@ -34,7 +35,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Chats',
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadge: friendUnreadTotal > 0 ? friendUnreadTotal : undefined,
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <MessageSquare size={size || 22} color={color} />
           ),
@@ -63,6 +64,7 @@ export default function TabsLayout() {
         name="friends"
         options={{
           title: 'Friends',
+          tabBarBadge: friendRequestsCount > 0 ? friendRequestsCount : undefined,
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <UserPlus size={size || 22} color={color} />
           ),

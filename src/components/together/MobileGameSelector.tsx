@@ -141,7 +141,7 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
   userStats = {},
   currentUserId,
 }) => {
-  const { theme } = useTheme();
+  const { theme, mode } = useTheme();
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [showStatsDashboard, setShowStatsDashboard] = useState<boolean>(false);
 
@@ -328,8 +328,15 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
                     </Text>
                   </View>
                   <TouchableOpacity
-                    style={[styles.playMiniBtn, { backgroundColor: theme.accent }]}
+                    style={[
+                      styles.playMiniBtn,
+                      {
+                        backgroundColor: theme.accent,
+                        borderColor: mode === 'aurora' ? '#00bcd4' : theme.accent,
+                      },
+                    ]}
                     onPress={() => onSelectGame(game.id)}
+                    activeOpacity={0.75}
                   >
                     <Text style={styles.playMiniBtnText}>Play</Text>
                   </TouchableOpacity>
@@ -424,21 +431,61 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
               <TouchableOpacity
                 style={[
                   styles.playButton,
-                  { backgroundColor: theme.muted },
-                  isSelected && { backgroundColor: theme.accent },
+                  {
+                    backgroundColor: isSelected
+                      ? theme.accent
+                      : mode === 'dark'
+                      ? 'rgba(139, 92, 246, 0.22)'
+                      : mode === 'aurora'
+                      ? 'rgba(0, 188, 212, 0.22)'
+                      : 'rgba(0, 168, 132, 0.12)',
+                    borderColor: isSelected
+                      ? theme.accent
+                      : mode === 'dark'
+                      ? 'rgba(139, 92, 246, 0.55)'
+                      : mode === 'aurora'
+                      ? 'rgba(0, 188, 212, 0.55)'
+                      : 'rgba(0, 168, 132, 0.4)',
+                  },
                 ]}
                 onPress={() => onSelectGame(game.id)}
+                activeOpacity={0.75}
               >
                 <Play
                   size={14}
-                  color={isSelected ? '#ffffff' : theme.foreground}
+                  color={
+                    isSelected
+                      ? '#ffffff'
+                      : mode === 'dark'
+                      ? '#c4b5fd'
+                      : mode === 'aurora'
+                      ? '#22d3ee'
+                      : theme.accent
+                  }
+                  fill={
+                    isSelected
+                      ? '#ffffff'
+                      : mode === 'dark'
+                      ? '#c4b5fd'
+                      : mode === 'aurora'
+                      ? '#22d3ee'
+                      : theme.accent
+                  }
                   style={{ marginRight: 6 }}
                 />
                 <Text
                   style={[
                     styles.playButtonText,
-                    { color: theme.foreground },
-                    isSelected && { color: '#ffffff', fontWeight: '800' },
+                    {
+                      color: isSelected
+                        ? '#ffffff'
+                        : mode === 'dark'
+                        ? '#ffffff'
+                        : mode === 'aurora'
+                        ? '#e0f7fa'
+                        : theme.foreground,
+                    },
+                    isSelected && { fontWeight: '800' },
                   ]}
                 >
                   {isSelected ? 'Selected Game' : 'Play'}
@@ -608,6 +655,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
+    borderWidth: 1,
   },
   playMiniBtnText: {
     color: '#ffffff',
@@ -707,11 +755,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 40,
+    height: 42,
     borderRadius: 12,
+    borderWidth: 1.5,
   },
   playButtonText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
 });

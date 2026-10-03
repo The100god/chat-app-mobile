@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,22 @@ import {
   Image,
   ActivityIndicator,
   Switch,
+  Platform,
 } from 'react-native';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useTheme } from '../../../src/context/ThemeContext';
 import { apiFetch } from '../../../src/utils/apiFetch';
 import { getApiUrl } from '../../../src/utils/apiUrl';
-import { setLockPin, removeLockPin } from '../../../src/utils/authStorage';
+import {
+  getLockPin,
+  setLockPin,
+  removeLockPin,
+  getLockTimeout,
+  setLockTimeout,
+  setAnimatedBgConfig,
+} from '../../../src/utils/authStorage';
+import { useAtom } from 'jotai';
+import { animatedBgEnabledAtom, animatedBgTextAtom, animatedBgTextColorAtom } from '../../../src/states/States';
 import { showToast } from '../../../src/components/Toast';
 import { UIModal } from '../../../src/components/UIModal';
 import {
@@ -29,7 +39,45 @@ import {
   Moon,
   Sparkles,
   ChevronRight,
+  Eye,
+  EyeOff,
+  Palette,
 } from 'lucide-react-native';
+import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBackground';
+
+const LOCK_TIMEOUT_OPTIONS = [
+  { label: 'Immediately', value: -1 },
+  { label: '10s', value: 10 },
+  { label: '30s', value: 30 },
+  { label: '5 min', value: 300 },
+  { label: '30 min', value: 1800 },
+];
+
+const PRESET_HEX_LIST = ['#ffffff', '#f472b6', '#38bdf8', '#c084fc', '#fbbf24', '#34d399', '#f87171'];
+
+const PALETTE_COLORS = [
+  '#FFFFFF', '#E5E7EB', '#9CA3AF', '#374151',
+  '#F87171', '#EF4444', '#DC2626', '#B91C1C',
+  '#FB923C', '#F97316', '#EA580C', '#C2410C',
+  '#FBBF24', '#F59E0B', '#D97706', '#FACC15',
+  '#34D399', '#10B981', '#059669', '#047857',
+  '#38BDF8', '#0EA5E9', '#0284C7', '#0369A1',
+  '#818CF8', '#6366F1', '#4F46E5', '#4338CA',
+  '#C084FC', '#A855F7', '#9333EA', '#7E22CE',
+  '#F472B6', '#EC4899', '#DB2777', '#BE185D',
+];
+
+function isLightColor(hex: string): boolean {
+  if (!hex || !hex.startsWith('#')) return false;
+  const c = hex.substring(1);
+  const rgb = parseInt(c.length === 3 ? c.split('').map((x) => x + x).join('') : c, 16);
+  if (isNaN(rgb)) return false;
+  const r = (rgb >> 16) & 0xff;
+  const g = (rgb >> 8) & 0xff;
+  const b = (rgb >> 0) & 0xff;
+  const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luma > 160;
+}
 
 export default function SettingsTab() {
   const { user, logout, refreshUserData } = useAuth();
@@ -42,17 +90,84 @@ export default function SettingsTab() {
   // Notifications Toggle
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
+  // Animated Background Settings
+  const [animatedBgEnabled, setAnimatedBgEnabled] = useAtom(animatedBgEnabledAtom);
+  const [animatedBgText, setAnimatedBgText] = useAtom(animatedBgTextAtom);
+  const [animatedBgTextColor, setAnimatedBgTextColor] = useAtom(animatedBgTextColorAtom);
+  const [bgDraftText, setBgDraftText] = useState(animatedBgText || '');
+  const [bgDraftTextColor, setBgDraftTextColor] = useState(animatedBgTextColor || '');
+  const [isColorModalOpen, setIsColorModalOpen] = useState(false);
+  const [customHexInput, setCustomHexInput] = useState('');
+
+  useEffect(() => {
+    setBgDraftText(animatedBgText || '');
+  }, [animatedBgText]);
+
+  useEffect(() => {
+    setBgDraftTextColor(animatedBgTextColor || '');
+  }, [animatedBgTextColor]);
+
+  const handleToggleAnimatedBg = (val: boolean) => {
+    setAnimatedBgEnabled(val);
+    setAnimatedBgConfig(val, animatedBgText, animatedBgTextColor);
+    showToast(val ? 'Animated background enabled' : 'Animated background disabled', 'info');
+  };
+
+  const handleSaveBgText = () => {
+    setAnimatedBgText(bgDraftText);
+    setAnimatedBgTextColor(bgDraftTextColor);
+    setAnimatedBgConfig(animatedBgEnabled, bgDraftText, bgDraftTextColor);
+    showToast('Background changes saved successfully!', 'success');
+  };
+
+  const handleResetBgText = () => {
+    setBgDraftText('');
+    setAnimatedBgText('');
+    setBgDraftTextColor('');
+    setAnimatedBgTextColor('');
+    setAnimatedBgConfig(animatedBgEnabled, '', '');
+    showToast('Reset to default emojis!', 'info');
+  };
+
+  const handleSelectPreset = (emojis: string, defaultColor?: string) => {
+    setBgDraftText(emojis);
+    setAnimatedBgText(emojis);
+    const newColor = defaultColor !== undefined ? defaultColor : bgDraftTextColor;
+    if (defaultColor !== undefined) {
+      setBgDraftTextColor(defaultColor);
+      setAnimatedBgTextColor(defaultColor);
+    }
+    setAnimatedBgConfig(animatedBgEnabled, emojis, newColor);
+    showToast('Preset theme applied!', 'info');
+  };
+
   // Password Modal
   const [isPassModalOpen, setIsPassModalOpen] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPass, setShowOldPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [changingPass, setChangingPass] = useState(false);
   const [passError, setPassError] = useState('');
 
   // PIN Modal
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pin, setPin] = useState('');
+  const [hasPin, setHasPin] = useState(false);
+  const [lockTimeout, setLockTimeoutState] = useState<number>(-1);
+  const [selectedTimeout, setSelectedTimeout] = useState<number>(-1);
+
+  useEffect(() => {
+    (async () => {
+      const stored = await getLockPin();
+      setHasPin(!!stored);
+      const timeout = await getLockTimeout();
+      setLockTimeoutState(timeout);
+      setSelectedTimeout(timeout === 0 ? -1 : timeout);
+    })();
+  }, []);
 
   // App Update state
   const [updatingApp, setUpdatingApp] = useState(false);
@@ -119,7 +234,10 @@ export default function SettingsTab() {
     }
     try {
       await setLockPin(pin);
-      showToast('PIN lock enabled successfully!', 'success');
+      await setLockTimeout(selectedTimeout);
+      setLockTimeoutState(selectedTimeout);
+      setHasPin(true);
+      showToast('PIN lock configured successfully!', 'success');
       setIsPinModalOpen(false);
       setPin('');
     } catch (err) {
@@ -129,6 +247,7 @@ export default function SettingsTab() {
 
   const handleDisablePin = async () => {
     await removeLockPin();
+    setHasPin(false);
     showToast('App Lock disabled.', 'info');
     setIsPinModalOpen(false);
     setPin('');
@@ -167,10 +286,12 @@ export default function SettingsTab() {
   };
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.background }]}
-      contentContainerStyle={styles.content}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <AnimatedEmojiBackground />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
       {/* Title */}
       <Text style={[styles.headerTitle, { color: theme.foreground }]}>Settings</Text>
 
@@ -279,7 +400,12 @@ export default function SettingsTab() {
               App Lock PIN
             </Text>
             <Text style={[styles.menuSubtitle, { color: theme.mutedText }]}>
-              4-digit PIN security lock
+              {hasPin
+                ? `Enabled • ${
+                    LOCK_TIMEOUT_OPTIONS.find((o) => o.value === lockTimeout)?.label ||
+                    'Immediately'
+                  }`
+                : '4-digit PIN security lock'}
             </Text>
           </View>
           <ChevronRight size={18} color={theme.mutedText} />
@@ -420,6 +546,188 @@ export default function SettingsTab() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Animated Background Toggle & Custom Emojis */}
+        <View style={[styles.prefDivider, { backgroundColor: theme.border }]} />
+
+        <View style={styles.bgToggleRow}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+              <Sparkles size={16} color="#ec4899" style={{ marginRight: 6 }} />
+              <Text style={[styles.menuTitle, { color: theme.foreground }]}>
+                Animated Background
+              </Text>
+            </View>
+            <Text style={[styles.menuSubtitle, { color: theme.mutedText }]}>
+              Floating faint emoji animations
+            </Text>
+          </View>
+          <Switch
+            value={animatedBgEnabled}
+            onValueChange={handleToggleAnimatedBg}
+            trackColor={{ false: theme.border, true: theme.accent }}
+            thumbColor="#ffffff"
+          />
+        </View>
+
+        {animatedBgEnabled && (
+          <View style={{ marginTop: 12 }}>
+            <Text style={[styles.inputLabel, { color: theme.mutedText, marginBottom: 6 }]}>
+              Custom Emojis or Text:
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <TextInput
+                style={[
+                  styles.bgTextInput,
+                  {
+                    backgroundColor: theme.input,
+                    borderColor: theme.border,
+                    color: theme.foreground,
+                  },
+                ]}
+                value={bgDraftText}
+                onChangeText={setBgDraftText}
+                placeholder="e.g. 🌸 💖 ✨ 🔥 or words"
+                placeholderTextColor={theme.mutedText}
+              />
+              <TouchableOpacity
+                style={[styles.saveBgBtn, { backgroundColor: theme.accent }]}
+                onPress={handleSaveBgText}
+                activeOpacity={0.7}
+              >
+                <Check size={14} color="#ffffff" style={{ marginRight: 4 }} />
+                <Text style={styles.saveBgBtnText}>Save</Text>
+              </TouchableOpacity>
+              {(bgDraftText || animatedBgText) ? (
+                <TouchableOpacity
+                  style={[styles.resetBgBtn, { backgroundColor: theme.muted, borderColor: theme.border }]}
+                  onPress={handleResetBgText}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.resetBgBtnText, { color: theme.foreground }]}>Reset</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Text Color Swatches */}
+            <Text style={[styles.presetHeader, { color: theme.mutedText, marginTop: 12 }]}>
+              Text Color: {bgDraftTextColor ? bgDraftTextColor.toUpperCase() : 'Auto'}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetScroll}>
+              <TouchableOpacity
+                style={[
+                  styles.colorChip,
+                  {
+                    backgroundColor: !bgDraftTextColor ? `${theme.accent}20` : theme.muted,
+                    borderColor: !bgDraftTextColor ? theme.accent : theme.border,
+                  },
+                ]}
+                onPress={() => setBgDraftTextColor('')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.colorChipText, { color: !bgDraftTextColor ? theme.accent : theme.foreground }]}>
+                  Auto
+                </Text>
+              </TouchableOpacity>
+
+              {[
+                { name: 'White', hex: '#ffffff' },
+                { name: 'Pink', hex: '#f472b6' },
+                { name: 'Cyan', hex: '#38bdf8' },
+                { name: 'Purple', hex: '#c084fc' },
+                { name: 'Gold', hex: '#fbbf24' },
+                { name: 'Mint', hex: '#34d399' },
+                { name: 'Coral', hex: '#f87171' },
+              ].map((c) => {
+                const isSel = bgDraftTextColor.toLowerCase() === c.hex.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    key={c.hex}
+                    style={[
+                      styles.colorDot,
+                      { backgroundColor: c.hex },
+                      isSel && { borderColor: theme.foreground, borderWidth: 2.5, transform: [{ scale: 1.1 }] },
+                    ]}
+                    onPress={() => setBgDraftTextColor(c.hex)}
+                    activeOpacity={0.7}
+                  >
+                    {isSel && (
+                      <Check size={12} color={c.hex === '#ffffff' || c.hex === '#fbbf24' ? '#111827' : '#ffffff'} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+
+              {/* Custom Color Picker Button */}
+              {(() => {
+                const isCustom = bgDraftTextColor && !PRESET_HEX_LIST.includes(bgDraftTextColor.toLowerCase());
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.colorDot,
+                      styles.customColorDot,
+                      {
+                        backgroundColor: isCustom ? bgDraftTextColor : theme.muted,
+                        borderColor: isCustom ? theme.foreground : theme.accent,
+                      },
+                    ]}
+                    onPress={() => {
+                      setCustomHexInput(bgDraftTextColor || '#EC4899');
+                      setIsColorModalOpen(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    {isCustom ? (
+                      <Check size={12} color={isLightColor(bgDraftTextColor) ? '#111827' : '#FFFFFF'} />
+                    ) : (
+                      <Palette size={13} color={theme.accent} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })()}
+            </ScrollView>
+
+            {/* Quick Preset Chips */}
+            <Text style={[styles.presetHeader, { color: theme.mutedText }]}>
+              Quick Presets:
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetScroll}>
+              {[
+                { label: '💕 Romance', emojis: '🌸 💖 💕 ❤️ 🥰 💌', color: '#f472b6' },
+                { label: '✨ Magic', emojis: '✨ 💫 🌟 🔮 🦋 🌙', color: '#c084fc' },
+                { label: '🔥 Energy', emojis: '🔥 ⚡ 🚀 💥 🎈 🎉', color: '#fbbf24' },
+                { label: '🌸 Spring', emojis: '🌸 🌷 🌺 🌹 🌿 🍃', color: '#34d399' },
+                { label: '🧸 Cute', emojis: '🧸 🐱 🐶 🐼 🍓 🍭', color: '#ffffff' },
+              ].map((p) => {
+                const isSelected = (bgDraftText || animatedBgText) === p.emojis;
+                return (
+                  <TouchableOpacity
+                    key={p.label}
+                    style={[
+                      styles.presetChip,
+                      {
+                        backgroundColor: isSelected ? `${theme.accent}20` : theme.muted,
+                        borderColor: isSelected ? theme.accent : theme.border,
+                      },
+                    ]}
+                    onPress={() => handleSelectPreset(p.emojis, p.color)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.presetChipText,
+                        { color: isSelected ? theme.accent : theme.foreground },
+                        isSelected && { fontWeight: '700' },
+                      ]}
+                    >
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       {/* Storage & Media */}
@@ -502,30 +810,59 @@ export default function SettingsTab() {
       >
         {passError ? <Text style={styles.errorText}>{passError}</Text> : null}
 
-        <TextInput
-          style={[styles.modalInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.foreground }]}
-          placeholder="Current Password"
-          placeholderTextColor={theme.mutedText}
-          secureTextEntry
-          value={oldPassword}
-          onChangeText={setOldPassword}
-        />
-        <TextInput
-          style={[styles.modalInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.foreground }]}
-          placeholder="New Password"
-          placeholderTextColor={theme.mutedText}
-          secureTextEntry
-          value={newPassword}
-          onChangeText={setNewPassword}
-        />
-        <TextInput
-          style={[styles.modalInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.foreground }]}
-          placeholder="Confirm New Password"
-          placeholderTextColor={theme.mutedText}
-          secureTextEntry
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-        />
+        <View style={[styles.passInputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
+          <TextInput
+            style={[styles.passInput, { color: theme.foreground }]}
+            placeholder="Current Password"
+            placeholderTextColor={theme.mutedText}
+            secureTextEntry={!showOldPass}
+            value={oldPassword}
+            onChangeText={setOldPassword}
+          />
+          <TouchableOpacity onPress={() => setShowOldPass((p) => !p)} style={styles.eyeBtn}>
+            {showOldPass ? (
+              <EyeOff size={18} color={theme.mutedText} />
+            ) : (
+              <Eye size={18} color={theme.mutedText} />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.passInputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
+          <TextInput
+            style={[styles.passInput, { color: theme.foreground }]}
+            placeholder="New Password"
+            placeholderTextColor={theme.mutedText}
+            secureTextEntry={!showNewPass}
+            value={newPassword}
+            onChangeText={setNewPassword}
+          />
+          <TouchableOpacity onPress={() => setShowNewPass((p) => !p)} style={styles.eyeBtn}>
+            {showNewPass ? (
+              <EyeOff size={18} color={theme.mutedText} />
+            ) : (
+              <Eye size={18} color={theme.mutedText} />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.passInputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
+          <TextInput
+            style={[styles.passInput, { color: theme.foreground }]}
+            placeholder="Confirm New Password"
+            placeholderTextColor={theme.mutedText}
+            secureTextEntry={!showConfirmPass}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+          />
+          <TouchableOpacity onPress={() => setShowConfirmPass((p) => !p)} style={styles.eyeBtn}>
+            {showConfirmPass ? (
+              <EyeOff size={18} color={theme.mutedText} />
+            ) : (
+              <Eye size={18} color={theme.mutedText} />
+            )}
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.modalActions}>
           <TouchableOpacity
@@ -552,7 +889,7 @@ export default function SettingsTab() {
       <UIModal
         visible={isPinModalOpen}
         onClose={() => setIsPinModalOpen(false)}
-        title="Configure App Lock PIN"
+        title={hasPin ? "Configure App Lock PIN" : "Set App Lock PIN"}
         subtitle="Enter 4-digit security PIN to lock Chugli"
         icon={<ShieldCheck size={20} color={theme.accent} />}
         position="center"
@@ -568,10 +905,43 @@ export default function SettingsTab() {
           onChangeText={setPin}
         />
 
+        <Text style={[styles.inputLabel, { color: theme.mutedText, marginBottom: 8 }]}>
+          Auto-Lock Timeout:
+        </Text>
+        <View style={styles.timeoutRow}>
+          {LOCK_TIMEOUT_OPTIONS.map((opt) => {
+            const isSel = selectedTimeout === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[
+                  styles.timeoutPill,
+                  {
+                    backgroundColor: isSel ? theme.accent : theme.muted,
+                    borderColor: isSel ? theme.accent : theme.border,
+                  },
+                ]}
+                onPress={() => setSelectedTimeout(opt.value)}
+              >
+                <Text
+                  style={[
+                    styles.timeoutPillText,
+                    { color: isSel ? '#ffffff' : theme.foreground },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <View style={styles.modalActions}>
-          <TouchableOpacity style={styles.cancelBtn} onPress={handleDisablePin}>
-            <Text style={{ color: '#ef4444', fontWeight: '600' }}>Disable PIN</Text>
-          </TouchableOpacity>
+          {hasPin ? (
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleDisablePin}>
+              <Text style={{ color: '#ef4444', fontWeight: '600' }}>Disable PIN</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={styles.cancelBtn}
             onPress={() => setIsPinModalOpen(false)}
@@ -630,7 +1000,127 @@ export default function SettingsTab() {
           </TouchableOpacity>
         </View>
       </UIModal>
-    </ScrollView>
+
+      {/* Custom Color Picker Modal */}
+      <UIModal
+        visible={isColorModalOpen}
+        onClose={() => setIsColorModalOpen(false)}
+        title="Custom Text Color"
+        subtitle="Choose a shade or type a 6-digit hex code"
+        icon={<Palette size={20} color={theme.accent} />}
+        position="center"
+      >
+        {/* Live Preview Box */}
+        {(() => {
+          const previewHex =
+            customHexInput.startsWith('#') &&
+            (customHexInput.length === 4 || customHexInput.length === 7)
+              ? customHexInput
+              : '#FFFFFF';
+          return (
+            <View style={[styles.colorPreviewBox, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <Text style={{ fontSize: 11, color: theme.mutedText, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Preview on {mode === 'dark' ? 'Dark' : 'Light'} theme:
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 8 }}>
+                <Text style={{ fontSize: 22 }}>🌸 💖</Text>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: previewHex }}>
+                  {bgDraftText.trim() ? bgDraftText.slice(0, 14) : 'Sample Text'}
+                </Text>
+              </View>
+              <View style={[styles.hexPill, { backgroundColor: theme.muted }]}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.foreground, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                  {previewHex.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
+
+        {/* HEX Input */}
+        <Text style={[styles.inputLabel, { color: theme.mutedText, marginTop: 12, marginBottom: 6 }]}>
+          HEX Color Code:
+        </Text>
+        <View style={[styles.hexInputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
+          <Text style={[styles.hashSymbol, { color: theme.mutedText }]}>#</Text>
+          <TextInput
+            style={[styles.hexTextInput, { color: theme.foreground }]}
+            value={customHexInput.replace('#', '')}
+            onChangeText={(txt) => {
+              const cleaned = txt.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6);
+              setCustomHexInput(cleaned ? '#' + cleaned.toUpperCase() : '');
+            }}
+            placeholder="EC4899"
+            placeholderTextColor={theme.mutedText}
+            autoCapitalize="characters"
+            maxLength={6}
+          />
+          <View
+            style={[
+              styles.hexPreviewDot,
+              {
+                backgroundColor:
+                  customHexInput.startsWith('#') && (customHexInput.length === 4 || customHexInput.length === 7)
+                    ? customHexInput
+                    : '#FFFFFF',
+              },
+            ]}
+          />
+        </View>
+
+        {/* Quick Color Palette Grid */}
+        <Text style={[styles.inputLabel, { color: theme.mutedText, marginTop: 14, marginBottom: 8 }]}>
+          Palette Colors:
+        </Text>
+        <View style={styles.colorPaletteGrid}>
+          {PALETTE_COLORS.map((hex) => {
+            const isSel = customHexInput.toUpperCase() === hex.toUpperCase();
+            return (
+              <TouchableOpacity
+                key={hex}
+                style={[
+                  styles.gridColorDot,
+                  { backgroundColor: hex },
+                  isSel && { borderColor: theme.foreground, borderWidth: 2.5, transform: [{ scale: 1.15 }] },
+                ]}
+                onPress={() => setCustomHexInput(hex)}
+                activeOpacity={0.7}
+              >
+                {isSel && (
+                  <Check size={11} color={isLightColor(hex) ? '#111827' : '#FFFFFF'} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Modal Actions */}
+        <View style={styles.modalActions}>
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={() => setIsColorModalOpen(false)}
+          >
+            <Text style={{ color: theme.mutedText, fontWeight: '600' }}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.confirmBtn, { backgroundColor: theme.accent }]}
+            onPress={() => {
+              let finalColor = customHexInput.trim();
+              if (!finalColor.startsWith('#')) finalColor = '#' + finalColor;
+              if (finalColor.length !== 4 && finalColor.length !== 7) {
+                finalColor = '#FFFFFF';
+              }
+              setBgDraftTextColor(finalColor);
+              setIsColorModalOpen(false);
+              showToast(`Color ${finalColor} selected!`, 'info');
+            }}
+          >
+            <Text style={{ color: '#ffffff', fontWeight: '700' }}>Apply Color</Text>
+          </TouchableOpacity>
+        </View>
+      </UIModal>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -895,5 +1385,182 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 14,
+  },
+  passInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    height: 46,
+    marginBottom: 10,
+  },
+  passInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 14,
+  },
+  eyeBtn: {
+    padding: 6,
+  },
+  timeoutRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  timeoutPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  timeoutPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  prefDivider: {
+    height: 1,
+    marginVertical: 14,
+  },
+  bgToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bgTextInput: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  saveBgBtn: {
+    paddingHorizontal: 12,
+    height: 42,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  saveBgBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  resetBgBtn: {
+    paddingHorizontal: 12,
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resetBgBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  presetHeader: {
+    fontSize: 11,
+    marginTop: 10,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  presetScroll: {
+    gap: 6,
+    paddingVertical: 2,
+  },
+  presetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  colorDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 3,
+  },
+  colorChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 4,
+  },
+  colorChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  customColorDot: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+  },
+  colorPreviewBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  hexPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  hexInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+  },
+  hashSymbol: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginRight: 4,
+  },
+  hexTextInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  hexPreviewDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  colorPaletteGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  gridColorDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

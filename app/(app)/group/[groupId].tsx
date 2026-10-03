@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
+  Keyboard,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
@@ -34,11 +35,13 @@ import { showToast } from '../../../src/components/Toast';
 import { AudioPlayer } from '../../../src/components/AudioPlayer';
 import { MediaViewerModal } from '../../../src/components/MediaViewerModal';
 import { UIConfirmDialog } from '../../../src/components/UIModal';
+import { EmojiPicker } from '../../../src/components/EmojiPicker';
 import {
   ArrowLeft,
   Send,
   Image as ImageIcon,
   Mic,
+  Smile,
   Info,
   X,
   LogOut,
@@ -52,6 +55,7 @@ import {
   CheckCheck,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBackground';
 
 function formatCountdown(expiresAt: string): string {
   const diff = new Date(expiresAt).getTime() - Date.now();
@@ -129,6 +133,8 @@ export default function GroupChatScreen() {
   const [editGroupPhoto, setEditGroupPhoto] = useState('');
   const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
   const [selectedNewMembers, setSelectedNewMembers] = useState<string[]>([]);
+  const [selectedMsgForAction, setSelectedMsgForAction] = useState<Message | null>(null);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [, setCountdownTick] = useState(0);
 
   const [confirmModal, setConfirmModal] = useState<{
@@ -281,6 +287,7 @@ export default function GroupChatScreen() {
     socket.on('groupDeleted', handleGroupDeleted);
     socket.on('removedFromGroup', handleRemovedFromGroup);
     socket.on('groupMessageDeleted', handleGroupMessageDeleted);
+    socket.on('messageDeleted', handleGroupMessageDeleted);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -290,6 +297,7 @@ export default function GroupChatScreen() {
       socket.off('groupDeleted', handleGroupDeleted);
       socket.off('removedFromGroup', handleRemovedFromGroup);
       socket.off('groupMessageDeleted', handleGroupMessageDeleted);
+      socket.off('messageDeleted', handleGroupMessageDeleted);
     };
   }, [groupId, currentUserId, setSelectedGroup, router, fetchGroupMessages, fetchGroupDetails]);
 
@@ -708,6 +716,34 @@ export default function GroupChatScreen() {
     });
   };
 
+  const handleDeleteMessage = async (msg: Message, deleteForEveryone: boolean) => {
+    if (!msg._id || !currentUserId) return;
+    try {
+      const res = await apiFetch(`${getApiUrl()}/api/message/delete-message`, {
+        method: 'POST',
+        body: JSON.stringify({
+          messageId: msg._id,
+          userId: currentUserId,
+          isGroup: true,
+          deleteForEveryone,
+        }),
+      });
+
+      if (res.ok) {
+        setMessages((prev) => prev.filter((m) => m._id !== msg._id));
+        const socket = getSocket();
+        if (socket && deleteForEveryone && groupId) {
+          socket.emit('deleteMessage', { messageId: msg._id, groupId });
+        }
+        showToast('Message deleted.', 'success');
+      }
+    } catch (err) {
+      console.error('Delete group message error:', err);
+    } finally {
+      setSelectedMsgForAction(null);
+    }
+  };
+
   // Friends not yet in group
   const groupMemberIds = (selectedGroup?.groupMember || []).map((m: any) =>
     typeof m === 'object' ? m._id : m
@@ -716,6 +752,7 @@ export default function GroupChatScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top']}>
+      <AnimatedEmojiBackground />
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -786,7 +823,9 @@ export default function GroupChatScreen() {
               const isMe = senderId === currentUserId;
 
               return (
-                <View
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onLongPress={() => setSelectedMsgForAction(item)}
                   style={[
                     styles.messageBubble,
                     isMe
@@ -943,7 +982,7 @@ export default function GroupChatScreen() {
                       }
                     })() : null}
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             }}
           />
@@ -993,6 +1032,13 @@ export default function GroupChatScreen() {
           </View>
         ) : null}
 
+        {/* Emoji Picker Drawer */}
+        {isEmojiPickerOpen ? (
+          <EmojiPicker
+            onSelectEmoji={(emoji) => setText((prev) => prev + emoji)}
+          />
+        ) : null}
+
         {/* Input Bar */}
         <View
           style={[
@@ -1037,9 +1083,25 @@ export default function GroupChatScreen() {
 
               <TouchableOpacity
                 style={styles.iconBtn}
-                onPress={startRecording}
+                onPress={() => {
+                  setIsEmojiPickerOpen(false);
+                  startRecording();
+                }}
               >
                 <Mic size={22} color={theme.mutedText} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setIsEmojiPickerOpen((prev) => !prev);
+                }}
+              >
+                <Smile
+                  size={22}
+                  color={isEmojiPickerOpen ? theme.accent : theme.mutedText}
+                />
               </TouchableOpacity>
 
               <TextInput
@@ -1055,6 +1117,7 @@ export default function GroupChatScreen() {
                 placeholderTextColor={theme.mutedText}
                 value={text}
                 onChangeText={setText}
+                onFocus={() => setIsEmojiPickerOpen(false)}
                 multiline
               />
 
@@ -1064,7 +1127,10 @@ export default function GroupChatScreen() {
                   { backgroundColor: theme.accent },
                   (!text.trim() && attachedMedia.length === 0 && !sending) && styles.disabledSend,
                 ]}
-                onPress={handleSendMessage}
+                onPress={() => {
+                  setIsEmojiPickerOpen(false);
+                  handleSendMessage();
+                }}
                 disabled={(!text.trim() && attachedMedia.length === 0) || sending}
               >
                 {sending ? (
@@ -1319,6 +1385,45 @@ export default function GroupChatScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </Modal>
+
+        {/* Message Options Modal (Delete for me / Delete for everyone) */}
+        <Modal visible={!!selectedMsgForAction} animationType="fade" transparent>
+          <TouchableOpacity
+            style={styles.centerModalOverlay}
+            activeOpacity={1}
+            onPress={() => setSelectedMsgForAction(null)}
+          >
+            <View style={[styles.modalContentCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.foreground, textAlign: 'center', marginBottom: 12 }]}>
+                Message Options
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.deleteOptionRow, { backgroundColor: theme.muted }]}
+                onPress={() => selectedMsgForAction && handleDeleteMessage(selectedMsgForAction, false)}
+              >
+                <Trash2 size={18} color="#ef4444" />
+                <Text style={styles.deleteText}>Delete for me</Text>
+              </TouchableOpacity>
+
+              {selectedMsgForAction?.sender === currentUserId ||
+              (typeof selectedMsgForAction?.sender === 'object' &&
+                selectedMsgForAction?.sender?._id === currentUserId) ? (
+                <TouchableOpacity
+                  style={[styles.deleteOptionRow, { backgroundColor: theme.muted, marginTop: 8 }]}
+                  onPress={() => selectedMsgForAction && handleDeleteMessage(selectedMsgForAction, true)}
+                >
+                  <Trash2 size={18} color="#ef4444" />
+                  <Text style={styles.deleteText}>Delete for everyone</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedMsgForAction(null)}>
+                <Text style={[styles.closeBtnText, { color: theme.mutedText }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
         </Modal>
 
         {/* Media Viewer Modal */}
@@ -1872,5 +1977,40 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  centerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContentCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+  },
+  deleteOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+  },
+  deleteText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 10,
+  },
+  closeBtn: {
+    marginTop: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  closeBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

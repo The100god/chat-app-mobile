@@ -22,6 +22,7 @@ import { getSocket } from '../../../src/hooks/useSocket';
 import * as ImagePicker from 'expo-image-picker';
 import { showToast } from '../../../src/components/Toast';
 import { Users, Plus, Check, X, Camera, Search } from 'lucide-react-native';
+import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBackground';
 
 export default function GroupsTab() {
   const router = useRouter();
@@ -270,6 +271,7 @@ export default function GroupsTab() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <AnimatedEmojiBackground />
       {/* Section Header */}
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Groups</Text>
@@ -316,49 +318,69 @@ export default function GroupsTab() {
             </TouchableOpacity>
           </View>
         }
-        renderItem={({ item }: { item: Group }) => (
-          <TouchableOpacity
-            style={[
-              styles.groupCard,
-              { backgroundColor: theme.card, borderColor: theme.border },
-            ]}
-            onPress={() => handleOpenGroup(item)}
-            activeOpacity={0.7}
-          >
-            {item.groupProfilePic ? (
-              <Image source={{ uri: item.groupProfilePic }} style={styles.groupAvatar} />
-            ) : (
-              <View
-                style={[
-                  styles.avatarFallback,
-                  { backgroundColor: `${theme.accent}20` },
-                ]}
-              >
-                <Text style={[styles.avatarInitial, { color: theme.accent }]}>
-                  {item.groupName ? item.groupName.charAt(0).toUpperCase() : 'G'}
-                </Text>
-              </View>
-            )}
+        ItemSeparatorComponent={() => (
+          <View style={[styles.separator, { backgroundColor: theme.border }]} />
+        )}
+        renderItem={({ item }: { item: Group }) => {
+          const hasUnread = Boolean(item.unreadCount && item.unreadCount > 0);
+          const memberCount = item.groupMember?.length || 0;
 
-            <View style={styles.groupInfo}>
-              <View style={styles.groupHeaderRow}>
-                <Text style={[styles.groupName, { color: theme.foreground }]} numberOfLines={1}>
-                  {item.groupName}
-                </Text>
-                {Boolean(item.unreadCount && item.unreadCount > 0) && (
-                  <View style={[styles.unreadBadge, { backgroundColor: theme.accent }]}>
-                    <Text style={styles.unreadBadgeText}>
-                      {item.unreadCount! > 99 ? '99+' : item.unreadCount}
+          return (
+            <TouchableOpacity
+              style={styles.groupRow}
+              onPress={() => handleOpenGroup(item)}
+              activeOpacity={0.65}
+            >
+              <View style={styles.avatarWrapper}>
+                {item.groupProfilePic ? (
+                  <Image source={{ uri: item.groupProfilePic }} style={styles.groupAvatar} />
+                ) : (
+                  <View
+                    style={[
+                      styles.avatarFallback,
+                      { backgroundColor: `${theme.accent}20` },
+                    ]}
+                  >
+                    <Text style={[styles.avatarInitial, { color: theme.accent }]}>
+                      {item.groupName ? item.groupName.charAt(0).toUpperCase() : 'G'}
                     </Text>
                   </View>
                 )}
+                <View style={[styles.groupBadge, { backgroundColor: theme.accent, borderColor: theme.background }]}>
+                  <Users size={9} color="#ffffff" />
+                </View>
               </View>
-              <Text style={[styles.groupSubtext, { color: theme.mutedText }]} numberOfLines={1}>
-                {`${item.groupMember?.length || 0} ${item.groupMember?.length === 1 ? 'member' : 'members'}`}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
+
+              <View style={styles.groupInfo}>
+                <View style={styles.groupHeaderRow}>
+                  <Text
+                    style={[
+                      styles.groupName,
+                      { color: theme.foreground },
+                      hasUnread && styles.unreadGroupName,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.groupName}
+                  </Text>
+                  {hasUnread ? (
+                    <View style={[styles.unreadBadge, { backgroundColor: theme.accent }]}>
+                      <Text style={styles.unreadBadgeText}>
+                        {item.unreadCount! > 99 ? '99+' : item.unreadCount}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.groupFooterRow}>
+                  <Text style={[styles.groupSubtext, { color: theme.mutedText }]} numberOfLines={1}>
+                    {memberCount} {memberCount === 1 ? 'member' : 'members'}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
       />
 
       {/* Create Group Modal */}
@@ -536,63 +558,88 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   listContent: {
-    paddingHorizontal: 16,
     paddingBottom: 24,
   },
-  groupCard: {
+  groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 10,
-    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  separator: {
+    height: 1,
+    marginLeft: 78,
+  },
+  avatarWrapper: {
+    position: 'relative',
   },
   groupAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  groupBadge: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
   },
   avatarFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitial: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
   },
   groupInfo: {
     marginLeft: 14,
     flex: 1,
+    justifyContent: 'center',
   },
   groupHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   groupName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     flex: 1,
     marginRight: 8,
   },
+  unreadGroupName: {
+    fontWeight: '700',
+  },
+  groupFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   groupSubtext: {
-    fontSize: 13,
+    fontSize: 13.5,
+    flex: 1,
   },
   unreadBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    alignItems: 'center',
+    borderRadius: 11,
+    minWidth: 22,
+    height: 22,
     justifyContent: 'center',
-    minWidth: 20,
+    alignItems: 'center',
+    paddingHorizontal: 6,
   },
   unreadBadgeText: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
   },
   emptyContainer: {

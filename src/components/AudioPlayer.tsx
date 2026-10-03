@@ -62,7 +62,19 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           try {
             const base64Data = uri.split(',')[1];
             if (base64Data) {
-              const tempFilePath = `${FileSystem.cacheDirectory}audio_cache_${Date.now()}.m4a`;
+              let extension = 'm4a';
+              const mimeMatch = uri.match(/^data:audio\/([a-zA-Z0-9\-_]+);/);
+              if (mimeMatch && mimeMatch[1]) {
+                const mime = mimeMatch[1].toLowerCase();
+                if (mime === 'webm') extension = 'webm';
+                else if (mime === 'mp3' || mime === 'mpeg') extension = 'mp3';
+                else if (mime === 'wav' || mime === 'wave') extension = 'wav';
+                else if (mime === 'ogg') extension = 'ogg';
+                else if (mime === 'aac') extension = 'aac';
+                else if (mime === 'mp4') extension = 'mp4';
+                else if (mime === 'm4a') extension = 'm4a';
+              }
+              const tempFilePath = `${FileSystem.cacheDirectory}audio_cache_${Date.now()}.${extension}`;
               await FileSystem.writeAsStringAsync(tempFilePath, base64Data, {
                 encoding: FileSystem.EncodingType.Base64,
               });

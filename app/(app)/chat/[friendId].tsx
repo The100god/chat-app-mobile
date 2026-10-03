@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
+  Keyboard,
 } from 'react-native';
 import { UIConfirmDialog } from '../../../src/components/UIModal';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -33,11 +34,13 @@ import { Audio } from 'expo-av';
 import { showToast } from '../../../src/components/Toast';
 import { AudioPlayer } from '../../../src/components/AudioPlayer';
 import { MediaViewerModal } from '../../../src/components/MediaViewerModal';
+import { EmojiPicker } from '../../../src/components/EmojiPicker';
 import {
   ArrowLeft,
   Send,
   Image as ImageIcon,
   Mic,
+  Smile,
   Clock,
   Trash2,
   MoreVertical,
@@ -54,6 +57,7 @@ import {
   AlertCircle,
 } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBackground';
 
 const DISAPPEAR_OPTIONS = [
   { label: 'Off', value: 0 },
@@ -151,6 +155,7 @@ export default function ChatDetailScreen() {
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [isTogetherModalOpen, setIsTogetherModalOpen] = useState(false);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [selectedMsgForAction, setSelectedMsgForAction] = useState<Message | null>(null);
   const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
   const [showClearChatConfirm, setShowClearChatConfirm] = useState(false);
@@ -702,6 +707,7 @@ export default function ChatDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top']}>
+      <AnimatedEmojiBackground />
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1006,6 +1012,13 @@ export default function ChatDetailScreen() {
           </View>
         ) : null}
 
+        {/* Emoji Picker Drawer */}
+        {isEmojiPickerOpen ? (
+          <EmojiPicker
+            onSelectEmoji={(emoji) => setText((prev) => prev + emoji)}
+          />
+        ) : null}
+
         {/* Input Bar */}
         <View
           style={[
@@ -1050,9 +1063,25 @@ export default function ChatDetailScreen() {
 
               <TouchableOpacity
                 style={styles.iconBtn}
-                onPress={startRecording}
+                onPress={() => {
+                  setIsEmojiPickerOpen(false);
+                  startRecording();
+                }}
               >
                 <Mic size={22} color={theme.mutedText} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setIsEmojiPickerOpen((prev) => !prev);
+                }}
+              >
+                <Smile
+                  size={22}
+                  color={isEmojiPickerOpen ? theme.accent : theme.mutedText}
+                />
               </TouchableOpacity>
 
               <TextInput
@@ -1068,6 +1097,7 @@ export default function ChatDetailScreen() {
                 placeholderTextColor={theme.mutedText}
                 value={text}
                 onChangeText={handleTextChange}
+                onFocus={() => setIsEmojiPickerOpen(false)}
                 multiline
               />
 
@@ -1077,7 +1107,10 @@ export default function ChatDetailScreen() {
                   { backgroundColor: theme.accent },
                   (!text.trim() && attachedMedia.length === 0 && !sending) && styles.disabledSend,
                 ]}
-                onPress={handleSendMessage}
+                onPress={() => {
+                  setIsEmojiPickerOpen(false);
+                  handleSendMessage();
+                }}
                 disabled={(!text.trim() && attachedMedia.length === 0) || sending}
               >
                 {sending ? (

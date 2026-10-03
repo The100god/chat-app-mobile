@@ -17,6 +17,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { getApiUrl } from '../../src/utils/apiUrl';
 import { User, Lock, Eye, EyeOff, Loader2 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AnimatedEmojiBackground } from '../../src/components/AnimatedEmojiBackground';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -73,13 +74,8 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      {/* 🌸 Floating Background Emojis */}
-      <View style={styles.floatingContainer} pointerEvents="none">
-        <Text style={[styles.floatingEmoji, { top: '8%', left: '10%' }]}>🌸</Text>
-        <Text style={[styles.floatingEmoji, { top: '22%', right: '12%' }]}>💖</Text>
-        <Text style={[styles.floatingEmoji, { top: '48%', left: '15%' }]}>✨</Text>
-        <Text style={[styles.floatingEmoji, { top: '72%', right: '15%' }]}>🌺</Text>
-      </View>
+      {/* 🌸 Animated Floating Background Emojis */}
+      <AnimatedEmojiBackground />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
