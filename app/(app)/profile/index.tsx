@@ -26,6 +26,7 @@ import {
   ArrowLeft,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBackground';
 
 export default function ProfileEditScreen() {
   const router = useRouter();
@@ -152,13 +153,7 @@ export default function ProfileEditScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       {/* Background Faint Floating Emojis matching web */}
-      <View style={styles.floatingContainer} pointerEvents="none">
-        <Text style={[styles.floatingEmoji, { top: '8%', left: '10%' }]}>🌸</Text>
-        <Text style={[styles.floatingEmoji, { top: '15%', right: '12%' }]}>💖</Text>
-        <Text style={[styles.floatingEmoji, { top: '45%', left: '8%' }]}>✨</Text>
-        <Text style={[styles.floatingEmoji, { top: '70%', right: '15%' }]}>🌺</Text>
-        <Text style={[styles.floatingEmoji, { top: '85%', left: '20%' }]}>💫</Text>
-      </View>
+      <AnimatedEmojiBackground />
 
       {/* Top Navigation Bar */}
       <View style={[styles.headerBar, { borderBottomColor: theme.border, backgroundColor: theme.card }]}>

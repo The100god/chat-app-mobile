@@ -27,7 +27,7 @@ export interface ThemeColors {
 
 export const THEMES: Record<ThemeMode, ThemeColors> = {
   light: {
-    background: '#efeae2',
+    background: '#ffffff',
     foreground: '#111b21',
     primary: '#00a884',
     secondary: '#25d366',
@@ -38,7 +38,7 @@ export const THEMES: Record<ThemeMode, ThemeColors> = {
     cardForeground: '#111b21',
     popover: '#ffffff',
     popoverForeground: '#111b21',
-    border: '#e9edef',
+    border: '#e2e8f0',
     input: '#f0f2f5',
     ring: '#00a884',
     bubbleSent: '#d9fdd3',
@@ -53,7 +53,7 @@ export const THEMES: Record<ThemeMode, ThemeColors> = {
     primary: '#8b5cf6',
     secondary: '#ec4899',
     accent: '#8b5cf6',
-    muted: '#1e293b',
+    muted: '#334155',
     mutedText: '#94a3b8',
     card: '#1e293b',
     cardForeground: '#f8fafc',
@@ -74,7 +74,7 @@ export const THEMES: Record<ThemeMode, ThemeColors> = {
     primary: '#00bcd4',
     secondary: '#ff4081',
     accent: '#4caf50',
-    muted: '#1e293b',
+    muted: '#243647',
     mutedText: '#94a3b8',
     card: '#1e293b',
     cardForeground: '#e0f2f1',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
@@ -7,19 +7,59 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useAtom } from 'jotai';
 import { isAppLockedAtom } from '../states/States';
-import { getLockPin } from '../utils/authStorage';
+import { getLockPin, getLockTimeout } from '../utils/authStorage';
+import { useTheme } from '../context/ThemeContext';
 import { Lock } from 'lucide-react-native';
 
 export const AppLockModal: React.FC = () => {
   const [isLocked, setIsLocked] = useAtom(isAppLockedAtom);
+  const { theme } = useTheme();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const backgroundTimeRef = useRef<number | null>(null);
 
-  if (!isLocked) return null;
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (
+        appStateRef.current.match(/active/) &&
+        nextAppState.match(/inactive|background/)
+      ) {
+        backgroundTimeRef.current = Date.now();
+      }
+
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        const storedPin = await getLockPin();
+        if (storedPin) {
+          const timeout = await getLockTimeout();
+          if (timeout === -1) {
+            setIsLocked(true);
+          } else if (timeout > 0 && backgroundTimeRef.current) {
+            const elapsed = (Date.now() - backgroundTimeRef.current) / 1000;
+            if (elapsed >= timeout) {
+              setIsLocked(true);
+            }
+          }
+        }
+        backgroundTimeRef.current = null;
+      }
+
+      appStateRef.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [setIsLocked]);
 
   const handleUnlock = async () => {
     if (!pin || pin.length < 4) {
@@ -47,23 +87,32 @@ export const AppLockModal: React.FC = () => {
 
   return (
     <Modal visible={isLocked} animationType="fade" transparent={false}>
-      <View style={styles.container}>
-        <View style={styles.card}>
-          <View style={styles.iconCircle}>
-            <Lock size={36} color="#3b82f6" />
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={[styles.iconCircle, { backgroundColor: `${theme.accent}20` }]}>
+            <Lock size={36} color={theme.accent} />
           </View>
-          <Text style={styles.title}>Chugli App Lock</Text>
-          <Text style={styles.subtitle}>Enter your 4-digit PIN to continue</Text>
+          <Text style={[styles.title, { color: theme.foreground }]}>Chugli App Lock</Text>
+          <Text style={[styles.subtitle, { color: theme.mutedText }]}>
+            Enter your 4-digit PIN to continue
+          </Text>
 
           <TextInput
-            style={styles.pinInput}
+            style={[
+              styles.pinInput,
+              {
+                backgroundColor: theme.input,
+                borderColor: theme.border,
+                color: theme.foreground,
+              },
+            ]}
             value={pin}
             onChangeText={(text: string) => {
               setPin(text);
               setError('');
             }}
             placeholder="••••"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={theme.mutedText}
             keyboardType="number-pad"
             maxLength={4}
             secureTextEntry
@@ -72,7 +121,7 @@ export const AppLockModal: React.FC = () => {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <TouchableOpacity
-            style={styles.unlockButton}
+            style={[styles.unlockButton, { backgroundColor: theme.accent }]}
             onPress={handleUnlock}
             disabled={verifying}
           >
@@ -91,7 +140,6 @@ export const AppLockModal: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -99,18 +147,15 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#1e293b',
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
   },
   iconCircle: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#1e3a8a',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -118,26 +163,21 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#f8fafc',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: '#94a3b8',
     marginBottom: 24,
     textAlign: 'center',
   },
   pinInput: {
     width: '80%',
     height: 54,
-    backgroundColor: '#0f172a',
     borderRadius: 14,
     fontSize: 28,
-    color: '#f8fafc',
     textAlign: 'center',
     letterSpacing: 12,
     borderWidth: 1,
-    borderColor: '#334155',
     marginBottom: 16,
   },
   errorText: {
@@ -148,14 +188,13 @@ const styles = StyleSheet.create({
   unlockButton: {
     width: '100%',
     height: 48,
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   unlockButtonText: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

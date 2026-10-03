@@ -93,11 +93,30 @@ export async function removeLockPin(): Promise<void> {
   try {
     if (Platform.OS === 'web') {
       await AsyncStorage.removeItem(APP_LOCK_PIN_KEY);
+      await AsyncStorage.removeItem('appLockTimeout');
       return;
     }
     await SecureStore.deleteItemAsync(APP_LOCK_PIN_KEY);
+    await AsyncStorage.removeItem('appLockTimeout');
   } catch (error) {
     console.error('Error removing lock PIN:', error);
+  }
+}
+
+export async function getLockTimeout(): Promise<number> {
+  try {
+    const val = await AsyncStorage.getItem('appLockTimeout');
+    return val !== null ? Number(val) : -1;
+  } catch {
+    return -1;
+  }
+}
+
+export async function setLockTimeout(timeout: number): Promise<void> {
+  try {
+    await AsyncStorage.setItem('appLockTimeout', String(timeout));
+  } catch (error) {
+    console.error('Error saving lock timeout:', error);
   }
 }
 
@@ -117,3 +136,33 @@ export async function setActiveWorkspace(workspace: 'chat' | 'together'): Promis
     console.error('Error saving workspace:', error);
   }
 }
+
+const ANIMATED_BG_ENABLED_KEY = 'animatedBgEnabled';
+const ANIMATED_BG_TEXT_KEY = 'animatedBgText';
+const ANIMATED_BG_TEXT_COLOR_KEY = 'animatedBgTextColor';
+
+export async function getAnimatedBgConfig(): Promise<{ enabled: boolean; text: string; textColor: string }> {
+  try {
+    const enabledVal = await AsyncStorage.getItem(ANIMATED_BG_ENABLED_KEY);
+    const textVal = await AsyncStorage.getItem(ANIMATED_BG_TEXT_KEY);
+    const colorVal = await AsyncStorage.getItem(ANIMATED_BG_TEXT_COLOR_KEY);
+    return {
+      enabled: enabledVal !== null ? enabledVal !== 'false' : true,
+      text: textVal || '',
+      textColor: colorVal || '',
+    };
+  } catch {
+    return { enabled: true, text: '', textColor: '' };
+  }
+}
+
+export async function setAnimatedBgConfig(enabled: boolean, text: string, textColor: string = ''): Promise<void> {
+  try {
+    await AsyncStorage.setItem(ANIMATED_BG_ENABLED_KEY, String(enabled));
+    await AsyncStorage.setItem(ANIMATED_BG_TEXT_KEY, text);
+    await AsyncStorage.setItem(ANIMATED_BG_TEXT_COLOR_KEY, textColor);
+  } catch (error) {
+    console.error('Error saving animated background settings:', error);
+  }
+}
+

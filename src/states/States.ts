@@ -92,15 +92,6 @@ export const selectedFriendAtom = atom<Friend | null>(null);
 export const friendsAtom = atom<Friend[]>([]);
 export const onlineUsersAtom = atom<string[]>([]);
 
-export const unreadCountAtom = atom<number>((get) => {
-  const friends = get(friendsAtom);
-  if (!Array.isArray(friends)) return 0;
-  return friends.reduce(
-    (total, friend) => total + (friend?.unreadMessagesCount || 0),
-    0
-  );
-});
-
 export const selectedGroupAtom = atom<Group | null>(null);
 export const groupsAtom = atom<Group[]>([]);
 export const groupUnreadTotalAtom = atom<number>((get) => {
@@ -111,6 +102,21 @@ export const groupUnreadTotalAtom = atom<number>((get) => {
     0
   );
 });
+
+export const friendUnreadTotalAtom = atom<number>((get) => {
+  const friends = get(friendsAtom);
+  if (!Array.isArray(friends)) return 0;
+  return friends.reduce(
+    (total, friend) => total + (friend?.unreadMessagesCount || 0),
+    0
+  );
+});
+
+export const unreadCountAtom = atom<number>((get) => {
+  return get(friendUnreadTotalAtom) + get(groupUnreadTotalAtom);
+});
+
+export const friendRequestsCountAtom = atom<number>(0);
 export const disappearDurationAtom = atom<number>(24);
 
 const emojiSet = [
@@ -127,3 +133,8 @@ export const floatingEmojisAtom = atom<FloatingEmoji[]>(() => {
     size: Math.random() * 1.5 + 1.2,
   }));
 });
+
+export const animatedBgEnabledAtom = atom<boolean>(true);
+export const animatedBgTextAtom = atom<string>('');
+export const animatedBgTextColorAtom = atom<string>('');
+

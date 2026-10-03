@@ -5,6 +5,7 @@ import {
   userIdAtom,
   friendsAtom,
   groupsAtom,
+  friendRequestsCountAtom,
   Friend,
   Group,
 } from '../states/States';
@@ -17,6 +18,7 @@ export const GlobalSocketManager: React.FC = () => {
   const [userId] = useAtom(userIdAtom);
   const [, setFriends] = useAtom(friendsAtom);
   const [, setGroups] = useAtom(groupsAtom);
+  const [, setFriendRequestsCount] = useAtom(friendRequestsCountAtom);
   const pathname = usePathname();
   const currentPathRef = useRef(pathname);
 
@@ -34,7 +36,10 @@ export const GlobalSocketManager: React.FC = () => {
     // 1. Initial friend list with unread counts
     socket.emit('getFriendListWithUnseen', { userId });
 
-    // 2. Fetch initial groups with unread counts
+    // 2. Initial friend requests count
+    socket.emit('getFriendRequests', { userId });
+
+    // 3. Fetch initial groups with unread counts
     const fetchGroups = async () => {
       try {
         const res = await apiFetch(`${getApiUrl()}/api/groups/${userId}`);
@@ -49,7 +54,7 @@ export const GlobalSocketManager: React.FC = () => {
     };
     fetchGroups();
 
-    // 3. Listeners for real-time unread count updates
+    // 4. Listeners for real-time unread count updates
     const handleFriendsUpdated = (updatedFriends: Friend[]) => {
       if (Array.isArray(updatedFriends)) {
         setFriends(updatedFriends);
@@ -100,7 +105,54 @@ export const GlobalSocketManager: React.FC = () => {
       });
     };
 
-    // 4. Real-time incoming Direct Message notification & badge increment
+    // 5. Friend Request Events
+    const handleFriendRequestsList = (data: any[]) => {
+      if (Array.isArray(data)) {
+        setFriendRequestsCount(data.length);
+      }
+    };
+
+    const handleFriendRequestReceived = (data: any) => {
+      setFriendRequestsCount((c) => c + 1);
+      const requester = data?.username || 'Someone';
+      showToast(`👋 New friend request from ${requester}!`, 'info', 5000);
+    };
+
+    const handleFriendRequestRemoved = () => {
+      setFriendRequestsCount((c) => Math.max(0, c - 1));
+    };
+
+    const handleFriendRequestAccepted = () => {
+      showToast('🎉 Friend request accepted!', 'success', 4000);
+      socket.emit('getFriendListWithUnseen', { userId });
+    };
+
+    const handleFriendRequestDenied = () => {
+      showToast('Friend request was declined.', 'info', 4000);
+    };
+
+    const handleFriendRemoved = ({ friendId }: { friendId: string }) => {
+      setFriends((prev) =>
+        prev.filter((f) => String(f.friendId || (f as any)._id) !== String(friendId))
+      );
+    };
+
+    // 6. Group Management Events
+    const handleGroupUpdatedGlobal = (updatedGroup: any) => {
+      if (!updatedGroup?._id) return;
+      setGroups((prev) =>
+        prev.map((g) =>
+          String(g._id) === String(updatedGroup._id) ? { ...g, ...updatedGroup } : g
+        )
+      );
+    };
+
+    const handleGroupRemovedGlobal = ({ groupId }: { groupId: string }) => {
+      if (!groupId) return;
+      setGroups((prev) => prev.filter((g) => String(g._id) !== String(groupId)));
+    };
+
+    // 7. Real-time incoming Direct Message notification & badge increment
     const handleNewMessage = (msg: any) => {
       if (!msg) return;
       const senderId = typeof msg.sender === 'object' ? msg.sender?._id : msg.sender;
@@ -146,7 +198,7 @@ export const GlobalSocketManager: React.FC = () => {
       }
     };
 
-    // 5. Real-time incoming Group Message notification & badge increment
+    // 8. Real-time incoming Group Message notification & badge increment
     const handleNewGroupMessage = (msg: any) => {
       if (!msg) return;
       const senderId = typeof msg.sender === 'object' ? msg.sender?._id : msg.sender;
@@ -198,6 +250,20 @@ export const GlobalSocketManager: React.FC = () => {
     socket.on('newMessage', handleNewMessage);
     socket.on('newGroupMessage', handleNewGroupMessage);
 
+    // Friend requests
+    socket.on('friendRequestsList', handleFriendRequestsList);
+    socket.on('friendRequestReceived', handleFriendRequestReceived);
+    socket.on('friendRequestRemoved', handleFriendRequestRemoved);
+    socket.on('friendRequestAccepted', handleFriendRequestAccepted);
+    socket.on('friendRequestDenied', handleFriendRequestDenied);
+    socket.on('friendRemoved', handleFriendRemoved);
+
+    // Groups
+    socket.on('groupUpdated', handleGroupUpdatedGlobal);
+    socket.on('leftGroup', handleGroupRemovedGlobal);
+    socket.on('removedFromGroup', handleGroupRemovedGlobal);
+    socket.on('groupDeleted', handleGroupRemovedGlobal);
+
     return () => {
       socket.off('friendsUpdated', handleFriendsUpdated);
       socket.off('unreadMessageCountUpdated', handleUnseenCountUpdate);
@@ -205,8 +271,20 @@ export const GlobalSocketManager: React.FC = () => {
       socket.off('groupUnreadCountUpdated', handleGroupUnreadUpdate);
       socket.off('newMessage', handleNewMessage);
       socket.off('newGroupMessage', handleNewGroupMessage);
+
+      socket.off('friendRequestsList', handleFriendRequestsList);
+      socket.off('friendRequestReceived', handleFriendRequestReceived);
+      socket.off('friendRequestRemoved', handleFriendRequestRemoved);
+      socket.off('friendRequestAccepted', handleFriendRequestAccepted);
+      socket.off('friendRequestDenied', handleFriendRequestDenied);
+      socket.off('friendRemoved', handleFriendRemoved);
+
+      socket.off('groupUpdated', handleGroupUpdatedGlobal);
+      socket.off('leftGroup', handleGroupRemovedGlobal);
+      socket.off('removedFromGroup', handleGroupRemovedGlobal);
+      socket.off('groupDeleted', handleGroupRemovedGlobal);
     };
-  }, [userId, setFriends, setGroups]);
+  }, [userId, setFriends, setGroups, setFriendRequestsCount]);
 
   return null;
 };

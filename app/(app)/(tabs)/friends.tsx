@@ -12,13 +12,14 @@ import {
 import { useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
 import { useTheme } from '../../../src/context/ThemeContext';
-import { selectedFriendAtom, userIdAtom } from '../../../src/states/States';
+import { selectedFriendAtom, userIdAtom, friendRequestsCountAtom } from '../../../src/states/States';
 import { useOnlineStatus } from '../../../src/hooks/useOnlineStatus';
 import { apiFetch } from '../../../src/utils/apiFetch';
 import { getApiUrl } from '../../../src/utils/apiUrl';
 import { getSocket } from '../../../src/hooks/useSocket';
 import { showToast } from '../../../src/components/Toast';
-import { Search, UserCheck, UserPlus, Check, X, MessageSquare, Users } from 'lucide-react-native';
+import { Search, UserCheck, UserPlus, Check, X, MessageSquare, Users, UserMinus } from 'lucide-react-native';
+import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBackground';
 
 interface FriendItem {
   friendId: string;
@@ -45,12 +46,15 @@ export default function FriendsScreen() {
   const { theme } = useTheme();
   const [userId] = useAtom(userIdAtom);
   const [, setSelectedFriend] = useAtom(selectedFriendAtom);
+  const [, setFriendRequestsCount] = useAtom(friendRequestsCountAtom);
   const { isUserOnline } = useOnlineStatus();
 
   const [activeTab, setActiveTab] = useState<'friends' | 'find' | 'requests'>('friends');
+  const [requestsSubTab, setRequestsSubTab] = useState<'received' | 'sent'>('received');
   const [friends, setFriends] = useState<FriendItem[]>([]);
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequestItem[]>([]);
+  const [sentRequests, setSentRequests] = useState<FriendRequestItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [requestedIds, setRequestedIds] = useState<Set<string>>(new Set());
@@ -72,39 +76,13 @@ export default function FriendsScreen() {
     }
   }, [userId]);
 
-  // Listen to live socket friendsUpdated event
-  useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
-
-    const handleFriendsUpdate = (updatedFriends: FriendItem[]) => {
-      setFriends(Array.isArray(updatedFriends) ? updatedFriends : []);
-    };
-
-    socket.on('friendsUpdated', handleFriendsUpdate);
-    return () => {
-      socket.off('friendsUpdated', handleFriendsUpdate);
-    };
-  }, []);
-
   // 2️⃣ Fetch Sent Friend Requests to pre-mark requested users (matching web FindUser)
-  useEffect(() => {
+  const fetchSentRequests = useCallback(() => {
     if (!userId) return;
     const socket = getSocket();
     if (!socket) return;
-
     socket.emit('getSentFriendRequests', { userId });
-
-    const handleSentRequests = (sentIds: string[]) => {
-      if (Array.isArray(sentIds)) {
-        setRequestedIds(new Set(sentIds));
-      }
-    };
-
-    socket.on('sentFriendRequestsList', handleSentRequests);
-    return () => {
-      socket.off('sentFriendRequestsList', handleSentRequests);
-    };
+    socket.emit('getSentFriendRequestsDetailed', { userId });
   }, [userId]);
 
   // 3️⃣ Fetch Pending Requests (matching web /api/friends/get-friend-requests/${userId})
@@ -115,14 +93,123 @@ export default function FriendsScreen() {
       const res = await apiFetch(`${getApiUrl()}/api/friends/friend-requests/${userId}`);
       if (res.ok) {
         const data = await res.json();
-        setFriendRequests(Array.isArray(data) ? data : []);
+        const validList = Array.isArray(data) ? data : [];
+        setFriendRequests(validList);
+        setFriendRequestsCount(validList.length);
       }
     } catch (err) {
       console.error('Error fetching friend requests:', err);
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, setFriendRequestsCount]);
+
+  // Real-time socket event listeners
+  useEffect(() => {
+    if (!userId) return;
+    const socket = getSocket();
+    if (!socket) return;
+
+    fetchSentRequests();
+
+    const handleFriendsUpdate = (updatedFriends: FriendItem[]) => {
+      setFriends(Array.isArray(updatedFriends) ? updatedFriends : []);
+    };
+
+    const handleSentRequests = (sentIds: string[]) => {
+      if (Array.isArray(sentIds)) {
+        setRequestedIds(new Set(sentIds));
+      }
+    };
+
+    const handleSentDetailed = (detailedList: FriendRequestItem[]) => {
+      if (Array.isArray(detailedList)) {
+        setSentRequests(detailedList);
+        setRequestedIds(new Set(detailedList.map((d) => d._id)));
+      }
+    };
+
+    const handleFriendRequestsList = (data: FriendRequestItem[]) => {
+      if (Array.isArray(data)) {
+        setFriendRequests(data);
+        setFriendRequestsCount(data.length);
+      }
+    };
+
+    const handleNewFriendRequest = (data: any) => {
+      const newReq: FriendRequestItem = {
+        _id: data.senderId,
+        username: data.username,
+        profilePic: data.profilePic,
+      };
+      setFriendRequests((prev) => {
+        if (prev.some((r) => r._id === newReq._id)) return prev;
+        return [...prev, newReq];
+      });
+      setFriendRequestsCount((c) => c + 1);
+    };
+
+    const handleAccepted = ({ receiverId }: { receiverId: string }) => {
+      setSentRequests((prev) => prev.filter((r) => r._id !== receiverId));
+      setRequestedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(receiverId);
+        return next;
+      });
+      fetchFriends();
+    };
+
+    const handleDenied = ({ receiverId }: { receiverId: string }) => {
+      setSentRequests((prev) => prev.filter((r) => r._id !== receiverId));
+      setRequestedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(receiverId);
+        return next;
+      });
+    };
+
+    const handleFriendRequestSent = () => {
+      fetchSentRequests();
+    };
+
+    const handleCancelled = ({ receiverId }: { receiverId: string }) => {
+      setSentRequests((prev) => prev.filter((r) => r._id !== receiverId));
+      setRequestedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(receiverId);
+        return next;
+      });
+    };
+
+    const handleRemoved = ({ senderId }: { senderId: string }) => {
+      setFriendRequests((prev) => prev.filter((r) => r._id !== senderId));
+      setFriendRequestsCount((c) => Math.max(0, c - 1));
+    };
+
+    socket.on('friendsUpdated', handleFriendsUpdate);
+    socket.on('sentFriendRequestsList', handleSentRequests);
+    socket.on('sentFriendRequestsDetailedList', handleSentDetailed);
+    socket.on('friendRequestsList', handleFriendRequestsList);
+    socket.on('friendRequestReceived', handleNewFriendRequest);
+    socket.on('friendRequestAccepted', handleAccepted);
+    socket.on('friendRequestDenied', handleDenied);
+    socket.on('friendRequestSent', handleFriendRequestSent);
+    socket.on('friendRequestCancelled', handleCancelled);
+    socket.on('friendRequestRemoved', handleRemoved);
+
+    return () => {
+      socket.off('friendsUpdated', handleFriendsUpdate);
+      socket.off('sentFriendRequestsList', handleSentRequests);
+      socket.off('sentFriendRequestsDetailedList', handleSentDetailed);
+      socket.off('friendRequestsList', handleFriendRequestsList);
+      socket.off('friendRequestReceived', handleNewFriendRequest);
+      socket.off('friendRequestAccepted', handleAccepted);
+      socket.off('friendRequestDenied', handleDenied);
+      socket.off('friendRequestSent', handleFriendRequestSent);
+      socket.off('friendRequestCancelled', handleCancelled);
+      socket.off('friendRequestRemoved', handleRemoved);
+    };
+  }, [userId, fetchFriends, fetchSentRequests, setFriendRequestsCount]);
 
   // 4️⃣ Search Users / Fetch Registered Users (matching web searchUsers)
   const searchUsers = useCallback(async (queryText: string) => {
@@ -151,8 +238,9 @@ export default function FriendsScreen() {
       searchUsers(searchQuery);
     } else if (activeTab === 'requests') {
       fetchFriendRequests();
+      fetchSentRequests();
     }
-  }, [activeTab, searchQuery, fetchFriends, searchUsers, fetchFriendRequests]);
+  }, [activeTab, searchQuery, fetchFriends, searchUsers, fetchFriendRequests, fetchSentRequests]);
 
   // Send Friend Request via Socket matching web
   const handleSendRequest = (receiverId: string) => {
@@ -168,20 +256,34 @@ export default function FriendsScreen() {
     showToast('Friend request sent!', 'success');
   };
 
+  // Cancel Sent Friend Request
+  const handleCancelRequest = (receiverId: string) => {
+    const socket = getSocket();
+    if (!socket || !userId) return;
+
+    socket.emit('cancelFriendRequest', {
+      senderId: userId,
+      receiverId,
+    });
+
+    setSentRequests((prev) => prev.filter((r) => r._id !== receiverId));
+    setRequestedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(receiverId);
+      return next;
+    });
+    showToast('Friend request cancelled.', 'info');
+  };
+
   // Respond to Friend Request via Socket / REST matching web
-  const handleRespondRequest = async (senderId: string, action: 'accept' | 'rejected') => {
+  const handleRespondRequest = async (senderId: string, action: 'accepted' | 'declined') => {
     if (!userId) return;
     const socket = getSocket();
     if (socket) {
-      // socket.emit('respondToFriendRequest', {
-      //   senderId,
-      //   receiverId: userId,
-      //   status: action,
-      // });
-      socket.emit("handleFriendRequest", {
+      socket.emit('handleFriendRequest', {
         senderId,
         receiverId: userId,
-        status: action === "accept" ? "accepted" : "declined",
+        status: action,
       });
     }
 
@@ -192,11 +294,12 @@ export default function FriendsScreen() {
       });
       if (res.ok) {
         setFriendRequests((prev) => prev.filter((r) => r._id !== senderId));
-        if (action === 'accept') {
+        setFriendRequestsCount((c) => Math.max(0, c - 1));
+        if (action === 'accepted') {
           showToast('Friend request accepted!', 'success');
           fetchFriends();
         } else {
-          showToast('Friend request rejected.', 'info');
+          showToast('Friend request declined.', 'info');
         }
       }
     } catch (err) {
@@ -216,6 +319,7 @@ export default function FriendsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <AnimatedEmojiBackground />
       {/* Sub-Header Tabs */}
       <View
         style={[
@@ -288,6 +392,9 @@ export default function FriendsScreen() {
               data={friends}
               keyExtractor={(item: FriendItem) => item.friendId}
               contentContainerStyle={styles.listContent}
+              ItemSeparatorComponent={() => (
+                <View style={[styles.separator, { backgroundColor: theme.border }]} />
+              )}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <Users size={48} color={theme.mutedText} style={{ marginBottom: 12 }} />
@@ -304,12 +411,9 @@ export default function FriendsScreen() {
 
                 return (
                   <TouchableOpacity
-                    style={[
-                      styles.userCard,
-                      { backgroundColor: theme.card, borderColor: theme.border },
-                    ]}
+                    style={styles.userRow}
                     onPress={() => openChatWithFriend(item)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.65}
                   >
                     <View style={{ position: 'relative' }}>
                       {item.profilePic ? (
@@ -325,7 +429,7 @@ export default function FriendsScreen() {
                         <View
                           style={[
                             styles.onlineIndicator,
-                            { borderColor: theme.card },
+                            { borderColor: theme.background },
                           ]}
                         />
                       )}
@@ -334,7 +438,7 @@ export default function FriendsScreen() {
                       <Text style={[styles.userName, { color: theme.foreground }]}>
                         {item.username} {item.friendId === userId ? '(You)' : ''}
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
                         {isOnline && (
                           <View
                             style={{
@@ -352,7 +456,7 @@ export default function FriendsScreen() {
                             { color: isOnline ? '#22c55e' : theme.mutedText },
                           ]}
                         >
-                          {isOnline ? 'Online' : item.friendId === userId ? 'Self Contact' : 'Offline'}
+                          {isOnline ? 'Online' : item.friendId === userId ? 'Self Contact' : 'Tap to chat'}
                         </Text>
                       </View>
                     </View>
@@ -361,8 +465,8 @@ export default function FriendsScreen() {
                         <Text style={styles.unreadText}>{item.unreadMessagesCount}</Text>
                       </View>
                     ) : null}
-                    <View style={[styles.chatButton, { backgroundColor: theme.accent }]}>
-                      <MessageSquare size={16} color="#ffffff" />
+                    <View style={[styles.chatButton, { backgroundColor: `${theme.accent}18` }]}>
+                      <MessageSquare size={16} color={theme.accent} />
                     </View>
                   </TouchableOpacity>
                 );
@@ -403,6 +507,9 @@ export default function FriendsScreen() {
               data={searchResults}
               keyExtractor={(item: UserSearchResult) => item._id}
               contentContainerStyle={styles.listContent}
+              ItemSeparatorComponent={() => (
+                <View style={[styles.separator, { backgroundColor: theme.border }]} />
+              )}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <Text style={[styles.emptySubtext, { color: theme.mutedText }]}>
@@ -415,12 +522,7 @@ export default function FriendsScreen() {
               renderItem={({ item }: { item: UserSearchResult }) => {
                 const isRequested = requestedIds.has(item._id);
                 return (
-                  <View
-                    style={[
-                      styles.userCard,
-                      { backgroundColor: theme.card, borderColor: theme.border },
-                    ]}
-                  >
+                  <View style={styles.userRow}>
                     {item.profilePic ? (
                       <Image source={{ uri: item.profilePic }} style={styles.avatar} />
                     ) : (
@@ -434,12 +536,15 @@ export default function FriendsScreen() {
                       <Text style={[styles.userName, { color: theme.foreground }]}>
                         {item.username}
                       </Text>
+                      <Text style={[styles.userEmail, { color: theme.mutedText }]}>
+                        Registered user
+                      </Text>
                     </View>
                     <TouchableOpacity
                       style={[
                         styles.addPillBtn,
                         { backgroundColor: theme.accent },
-                        isRequested && { backgroundColor: `${theme.accent}30`, borderColor: theme.accent },
+                        isRequested && { backgroundColor: `${theme.accent}20`, borderColor: theme.accent, borderWidth: 1 },
                       ]}
                       disabled={isRequested}
                       onPress={() => !isRequested && handleSendRequest(item._id)}
@@ -452,7 +557,7 @@ export default function FriendsScreen() {
                       ) : (
                         <View style={styles.requestedRow}>
                           <UserPlus size={14} color="#ffffff" style={{ marginRight: 4 }} />
-                          <Text style={styles.addContactText}>Add Contact</Text>
+                          <Text style={styles.addContactText}>Add</Text>
                         </View>
                       )}
                     </TouchableOpacity>
@@ -466,13 +571,113 @@ export default function FriendsScreen() {
 
       {activeTab === 'requests' && (
         <View style={styles.content}>
-          {loading && friendRequests.length === 0 ? (
-            <ActivityIndicator size="large" color={theme.accent} style={styles.loader} />
+          {/* Sub-tabs: Received vs Sent */}
+          <View
+            style={[
+              styles.subTabContainer,
+              { backgroundColor: theme.card, borderColor: theme.border },
+            ]}
+          >
+            <TouchableOpacity
+              style={[
+                styles.subTabButton,
+                requestsSubTab === 'received' && { backgroundColor: theme.accent },
+              ]}
+              onPress={() => setRequestsSubTab('received')}
+            >
+              <Text
+                style={[
+                  styles.subTabText,
+                  { color: theme.mutedText },
+                  requestsSubTab === 'received' && styles.activeSubTabText,
+                ]}
+              >
+                Received {friendRequests.length > 0 ? `(${friendRequests.length})` : ''}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.subTabButton,
+                requestsSubTab === 'sent' && { backgroundColor: theme.accent },
+              ]}
+              onPress={() => setRequestsSubTab('sent')}
+            >
+              <Text
+                style={[
+                  styles.subTabText,
+                  { color: theme.mutedText },
+                  requestsSubTab === 'sent' && styles.activeSubTabText,
+                ]}
+              >
+                Sent {sentRequests.length > 0 ? `(${sentRequests.length})` : ''}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {requestsSubTab === 'received' ? (
+            loading && friendRequests.length === 0 ? (
+              <ActivityIndicator size="large" color={theme.accent} style={styles.loader} />
+            ) : (
+              <FlatList
+                data={friendRequests}
+                keyExtractor={(item: FriendRequestItem) => item._id}
+                contentContainerStyle={styles.listContent}
+                ItemSeparatorComponent={() => (
+                  <View style={[styles.separator, { backgroundColor: theme.border }]} />
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={[styles.emptyText, { color: theme.mutedText }]}>
+                      No pending received friend requests.
+                    </Text>
+                  </View>
+                }
+                renderItem={({ item }: { item: FriendRequestItem }) => (
+                  <View style={styles.userRow}>
+                    {item.profilePic ? (
+                      <Image source={{ uri: item.profilePic }} style={styles.avatar} />
+                    ) : (
+                      <View style={[styles.avatarFallback, { backgroundColor: theme.accent }]}>
+                        <Text style={styles.avatarInitial}>
+                          {item.username?.charAt(0).toUpperCase() || 'U'}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.userInfo}>
+                      <Text style={[styles.userName, { color: theme.foreground }]}>
+                        {item.username || 'User'}
+                      </Text>
+                      <Text style={[styles.userEmail, { color: theme.mutedText }]}>
+                        {item.email || 'Wants to connect with you'}
+                      </Text>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity
+                        style={styles.acceptBtn}
+                        onPress={() => handleRespondRequest(item._id, 'accepted')}
+                      >
+                        <Check size={16} color="#ffffff" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.declineBtn}
+                        onPress={() => handleRespondRequest(item._id, 'declined')}
+                      >
+                        <X size={16} color="#ffffff" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              />
+            )
           ) : (
             <FlatList
-              data={friendRequests}
+              data={sentRequests}
               keyExtractor={(item: FriendRequestItem) => item._id}
               contentContainerStyle={styles.listContent}
+              ItemSeparatorComponent={() => (
+                <View style={[styles.separator, { backgroundColor: theme.border }]} />
+              )}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <Text style={[styles.emptyText, { color: theme.mutedText }]}>
@@ -481,12 +686,7 @@ export default function FriendsScreen() {
                 </View>
               }
               renderItem={({ item }: { item: FriendRequestItem }) => (
-                <View
-                  style={[
-                    styles.userCard,
-                    { backgroundColor: theme.card, borderColor: theme.border },
-                  ]}
-                >
+                <View style={styles.userRow}>
                   {item.profilePic ? (
                     <Image source={{ uri: item.profilePic }} style={styles.avatar} />
                   ) : (
@@ -500,24 +700,20 @@ export default function FriendsScreen() {
                     <Text style={[styles.userName, { color: theme.foreground }]}>
                       {item.username || 'User'}
                     </Text>
-                    <Text style={[styles.userEmail, { color: theme.mutedText }]}>
-                      {item.email || 'Wants to add you'}
+                    <Text style={[styles.userEmail, { color: '#f59e0b' }]}>
+                      Pending approval...
                     </Text>
                   </View>
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity
-                      style={styles.acceptBtn}
-                      onPress={() => handleRespondRequest(item._id, 'accept')}
-                    >
-                      <Check size={16} color="#ffffff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.declineBtn}
-                      onPress={() => handleRespondRequest(item._id, 'rejected')}
-                    >
-                      <X size={16} color="#ffffff" />
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.cancelPillBtn,
+                      { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.3)' },
+                    ]}
+                    onPress={() => handleCancelRequest(item._id)}
+                  >
+                    <UserMinus size={14} color="#ef4444" />
+                    <Text style={[styles.cancelPillText, { color: '#ef4444' }]}>Cancel</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             />
@@ -529,6 +725,41 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
+  subTabContainer: {
+    flexDirection: 'row',
+    padding: 4,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 4,
+  },
+  subTabButton: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderRadius: 16,
+  },
+  subTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  activeSubTabText: {
+    color: '#ffffff',
+  },
+  cancelPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  cancelPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
   container: {
     flex: 1,
   },
@@ -557,89 +788,97 @@ const styles = StyleSheet.create({
     flex: 1,
     marginTop: 12,
   },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 0,
+  },
   loader: {
     marginTop: 40,
   },
   listContent: {
-    paddingHorizontal: 16,
     paddingBottom: 24,
   },
-  searchBar: {
+  userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    paddingHorizontal: 14,
-    borderRadius: 24,
-    borderWidth: 1,
-    height: 44,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
-  searchInput: {
-    flex: 1,
-    height: 44,
-    fontSize: 14,
-  },
-  userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 10,
-    borderWidth: 1,
+  separator: {
+    height: 1,
+    marginLeft: 78,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   onlineIndicator: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
     backgroundColor: '#22c55e',
     borderWidth: 2,
   },
   avatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitial: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
   },
   userInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 14,
+    justifyContent: 'center',
   },
   userName: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
   },
   userEmail: {
-    fontSize: 12,
+    fontSize: 13.5,
     marginTop: 2,
   },
   unreadBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    borderRadius: 11,
+    minWidth: 22,
+    height: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
     marginRight: 8,
   },
   unreadText: {
     color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
   chatButton: {
-    padding: 10,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   addPillBtn: {
     paddingHorizontal: 14,

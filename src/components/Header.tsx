@@ -11,9 +11,7 @@ export const Header: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
   const [activeWorkspace, setActiveWorkspace] = useAtom(activeWorkspaceAtom);
-  const [unreadCount] = useAtom(unreadCountAtom);
-  const [groupUnreadTotal] = useAtom(groupUnreadTotalAtom);
-  const totalUnread = unreadCount + groupUnreadTotal;
+  const [totalUnread] = useAtom(unreadCountAtom);
   const router = useRouter();
   const pathname = usePathname();
 
