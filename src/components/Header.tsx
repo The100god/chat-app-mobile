@@ -27,11 +27,15 @@ export const Header: React.FC = () => {
     }
   };
 
+  const isDark = theme.background !== '#ffffff';
+  const headerBg = isDark ? 'rgba(15, 23, 42, 0.75)' : 'rgba(255, 255, 255, 0.85)';
+  const headerBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+
   return (
     <View
       style={[
         styles.headerContainer,
-        { backgroundColor: theme.card, borderBottomColor: theme.border },
+        { backgroundColor: headerBg, borderBottomColor: headerBorder },
       ]}
     >
       {/* Left Section: Profile Image (opens Profile) & Chugli Title with Logo (opens Home) */}
@@ -75,7 +79,10 @@ export const Header: React.FC = () => {
               backgroundColor: 'rgba(236, 72, 153, 0.15)',
               borderColor: '#ec4899',
             },
-            isTogether && { backgroundColor: theme.muted, borderColor: theme.border },
+            isTogether && {
+              backgroundColor: 'rgba(139, 92, 246, 0.18)',
+              borderColor: 'rgba(139, 92, 246, 0.45)',
+            },
           ]}
           onPress={toggleWorkspace}
           activeOpacity={0.8}
@@ -96,9 +103,9 @@ export const Header: React.FC = () => {
           )}
           <Text
             style={[
-              styles.togetherTextActive,
-              { color: theme.foreground },
-              isTogether && styles.workspaceText,
+              isTogether
+                ? [styles.workspaceText, { color: theme.accent }]
+                : [styles.togetherTextActive, { color: '#ec4899' }],
             ]}
           >
             {isTogether ? 'Chat' : 'Together'}

@@ -18,6 +18,7 @@ import { UIConfirmDialog } from '../../../src/components/UIModal';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
 import { useTheme } from '../../../src/context/ThemeContext';
+import { useSystemConfig } from '../../../src/context/ConfigContext';
 import {
   selectedFriendAtom,
   userIdAtom,
@@ -112,6 +113,7 @@ export default function ChatDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, mode } = useTheme();
+  const { isFeatureEnabled } = useSystemConfig();
   const [selectedFriend, setSelectedFriend] = useAtom(selectedFriendAtom);
   const [currentUserId] = useAtom(userIdAtom);
   const [disappearDuration, setDisappearDuration] = useAtom(disappearDurationAtom);
@@ -1020,108 +1022,131 @@ export default function ChatDetailScreen() {
         ) : null}
 
         {/* Input Bar */}
-        <View
-          style={[
-            styles.inputContainer,
-            { backgroundColor: theme.card, borderTopColor: theme.border },
-          ]}
-        >
-          {isRecording ? (
-            <View style={styles.recordingBar}>
-              <TouchableOpacity
-                style={styles.cancelRecBtn}
-                onPress={cancelRecording}
-                activeOpacity={0.7}
-              >
-                <Trash2 size={18} color="#ef4444" />
-                <Text style={styles.cancelRecText}>Cancel</Text>
-              </TouchableOpacity>
+        {!isFeatureEnabled('feature_chat_1on1') ? (
+          <View
+            style={[
+              styles.inputContainer,
+              {
+                backgroundColor: theme.card,
+                borderTopColor: theme.border,
+                justifyContent: 'center',
+                alignItems: 'center',
+                paddingVertical: 14,
+              },
+            ]}
+          >
+            <Text style={{ color: '#f59e0b', fontSize: 13, fontWeight: '600' }}>
+              ⚠️ Direct 1-on-1 chatting is temporarily paused by administrator.
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.inputContainer,
+              { backgroundColor: theme.card, borderTopColor: theme.border },
+            ]}
+          >
+            {isRecording ? (
+              <View style={styles.recordingBar}>
+                <TouchableOpacity
+                  style={styles.cancelRecBtn}
+                  onPress={cancelRecording}
+                  activeOpacity={0.7}
+                >
+                  <Trash2 size={18} color="#ef4444" />
+                  <Text style={styles.cancelRecText}>Cancel</Text>
+                </TouchableOpacity>
 
-              <View style={styles.recStatusContainer}>
-                <View style={styles.recRedDot} />
-                <Text style={[styles.recTimerText, { color: theme.foreground }]}>
-                  {Math.floor(recordDuration / 60)}:{recordDuration % 60 < 10 ? '0' : ''}{recordDuration % 60}
-                </Text>
-                <Text style={[styles.recLabelText, { color: theme.mutedText }]}>
-                  Recording Chugli...
-                </Text>
-              </View>
+                <View style={styles.recStatusContainer}>
+                  <View style={styles.recRedDot} />
+                  <Text style={[styles.recTimerText, { color: theme.foreground }]}>
+                    {Math.floor(recordDuration / 60)}:{recordDuration % 60 < 10 ? '0' : ''}{recordDuration % 60}
+                  </Text>
+                  <Text style={[styles.recLabelText, { color: theme.mutedText }]}>
+                    Recording Chugli...
+                  </Text>
+                </View>
 
-              <TouchableOpacity
-                style={[styles.finishRecBtn, { backgroundColor: theme.accent }]}
-                onPress={() => stopRecording(true)}
-                activeOpacity={0.8}
-              >
-                <Send size={18} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <TouchableOpacity style={styles.iconBtn} onPress={handlePickImage}>
-                <ImageIcon size={22} color={theme.mutedText} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => {
-                  setIsEmojiPickerOpen(false);
-                  startRecording();
-                }}
-              >
-                <Mic size={22} color={theme.mutedText} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setIsEmojiPickerOpen((prev) => !prev);
-                }}
-              >
-                <Smile
-                  size={22}
-                  color={isEmojiPickerOpen ? theme.accent : theme.mutedText}
-                />
-              </TouchableOpacity>
-
-              <TextInput
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: theme.input,
-                    borderColor: theme.border,
-                    color: theme.foreground,
-                  },
-                ]}
-                placeholder="Type a message..."
-                placeholderTextColor={theme.mutedText}
-                value={text}
-                onChangeText={handleTextChange}
-                onFocus={() => setIsEmojiPickerOpen(false)}
-                multiline
-              />
-
-              <TouchableOpacity
-                style={[
-                  styles.sendBtn,
-                  { backgroundColor: theme.accent },
-                  (!text.trim() && attachedMedia.length === 0 && !sending) && styles.disabledSend,
-                ]}
-                onPress={() => {
-                  setIsEmojiPickerOpen(false);
-                  handleSendMessage();
-                }}
-                disabled={(!text.trim() && attachedMedia.length === 0) || sending}
-              >
-                {sending ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
+                <TouchableOpacity
+                  style={[styles.finishRecBtn, { backgroundColor: theme.accent }]}
+                  onPress={() => stopRecording(true)}
+                  activeOpacity={0.8}
+                >
                   <Send size={18} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                {isFeatureEnabled('feature_media_sharing') && (
+                  <TouchableOpacity style={styles.iconBtn} onPress={handlePickImage}>
+                    <ImageIcon size={22} color={theme.mutedText} />
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+
+                {isFeatureEnabled('feature_voice_notes') && (
+                  <TouchableOpacity
+                    style={styles.iconBtn}
+                    onPress={() => {
+                      setIsEmojiPickerOpen(false);
+                      startRecording();
+                    }}
+                  >
+                    <Mic size={22} color={theme.mutedText} />
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setIsEmojiPickerOpen((prev) => !prev);
+                  }}
+                >
+                  <Smile
+                    size={22}
+                    color={isEmojiPickerOpen ? theme.accent : theme.mutedText}
+                  />
+                </TouchableOpacity>
+
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      backgroundColor: theme.input,
+                      borderColor: theme.border,
+                      color: theme.foreground,
+                    },
+                  ]}
+                  placeholder="Type a message..."
+                  placeholderTextColor={theme.mutedText}
+                  value={text}
+                  onChangeText={handleTextChange}
+                  onFocus={() => setIsEmojiPickerOpen(false)}
+                  multiline
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.sendBtn,
+                    { backgroundColor: theme.accent },
+                    (!text.trim() && attachedMedia.length === 0 && !sending) && styles.disabledSend,
+                  ]}
+                  onPress={() => {
+                    setIsEmojiPickerOpen(false);
+                    handleSendMessage();
+                  }}
+                  disabled={(!text.trim() && attachedMedia.length === 0) || sending}
+                >
+                  {sending ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Send size={18} color="#ffffff" />
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
 
         {/* Settings Menu Modal */}
         <Modal visible={isSettingsMenuOpen} animationType="fade" transparent>

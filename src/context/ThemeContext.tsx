@@ -91,6 +91,8 @@ export const THEMES: Record<ThemeMode, ThemeColors> = {
   },
 };
 
+import { useSystemConfig } from './ConfigContext';
+
 interface ThemeContextType {
   mode: ThemeMode;
   theme: ThemeColors;
@@ -107,6 +109,7 @@ const STORAGE_KEY = 'chatTheme';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mode, setModeState] = useState<ThemeMode>('dark');
+  const { config } = useSystemConfig();
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((saved) => {
@@ -121,11 +124,38 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     AsyncStorage.setItem(STORAGE_KEY, newMode).catch(console.error);
   };
 
+  const activeTheme = React.useMemo(() => {
+    const base = THEMES[mode];
+    const adminTheme = config?.themes?.themes?.[mode];
+    if (!adminTheme) return base;
+
+    // Ensure mutedText is NEVER overwritten by a surface background color
+    const safeMutedText =
+      adminTheme.mutedText &&
+      adminTheme.mutedText !== adminTheme.muted &&
+      adminTheme.mutedText !== adminTheme.card &&
+      adminTheme.mutedText !== adminTheme.background
+        ? adminTheme.mutedText
+        : base.mutedText;
+
+    return {
+      ...base,
+      ...adminTheme,
+      mutedText: safeMutedText,
+      cardForeground: adminTheme.foreground || base.cardForeground,
+      popover: adminTheme.card || base.popover,
+      popoverForeground: adminTheme.foreground || base.popoverForeground,
+      ring: adminTheme.primary || base.ring,
+      input: adminTheme.card || adminTheme.secondary || base.input,
+    };
+  }, [mode, config?.themes]);
+
   return (
-    <ThemeContext.Provider value={{ mode, theme: THEMES[mode], setTheme }}>
+    <ThemeContext.Provider value={{ mode, theme: activeTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );
 };
 
 export const useTheme = () => useContext(ThemeContext);
+

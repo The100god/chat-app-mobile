@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { useAtom } from 'jotai';
 import { useTheme } from '../context/ThemeContext';
+import { useSystemConfig } from '../context/ConfigContext';
 import { animatedBgEnabledAtom, animatedBgTextAtom, animatedBgTextColorAtom } from '../states/States';
 import { getAnimatedBgConfig } from '../utils/authStorage';
 
@@ -59,28 +60,31 @@ function FloatingEmojiNode({
   isDark,
   textColor,
   isCustom,
+  speedFactor = 1,
 }: {
   item: FloatingEmojiItem;
   displayEmoji: string;
   isDark: boolean;
   textColor?: string;
   isCustom?: boolean;
+  speedFactor?: number;
 }) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let isMounted = true;
+    const duration = Math.max(1500, Math.round(item.duration * speedFactor));
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(anim, {
           toValue: 1,
-          duration: item.duration,
+          duration,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(anim, {
           toValue: 0,
-          duration: item.duration,
+          duration,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
@@ -98,7 +102,7 @@ function FloatingEmojiNode({
       clearTimeout(timer);
       animation.stop();
     };
-  }, [anim, item.duration, item.delay]);
+  }, [anim, item.duration, item.delay, speedFactor]);
 
   const translateY = anim.interpolate({
     inputRange: [0, 0.5, 1],
@@ -144,6 +148,7 @@ function FloatingEmojiNode({
 
 export function AnimatedEmojiBackground() {
   const { mode } = useTheme();
+  const { config, isFeatureEnabled } = useSystemConfig();
   const [enabled, setEnabled] = useAtom(animatedBgEnabledAtom);
   const [customText, setCustomText] = useAtom(animatedBgTextAtom);
   const [textColor, setTextColor] = useAtom(animatedBgTextColorAtom);
@@ -166,18 +171,28 @@ export function AnimatedEmojiBackground() {
     };
   }, [setEnabled, setCustomText, setTextColor]);
 
-  if (!enabled) return null;
+  const isBgFeatureEnabled =
+    isFeatureEnabled('feature_animated_bg') && config?.animated_bg?.enabled !== false;
+
+  if (!enabled || !isBgFeatureEnabled) return null;
 
   const customTokens = parseCustomEmojis(customText);
   const isCustom = customTokens.length > 0;
+  const adminEmojis =
+    config?.animated_bg?.defaultEmojis && config.animated_bg.defaultEmojis.length > 0
+      ? config.animated_bg.defaultEmojis
+      : null;
+  const speedFactor = config?.animated_bg?.floatingSpeed ? 1 / config.animated_bg.floatingSpeed : 1;
 
   return (
     <View style={styles.container} pointerEvents="none">
       {PRESET_ITEMS.map((item, index) => {
-        const displayEmoji =
-          customTokens.length > 0
-            ? customTokens[index % customTokens.length]
-            : item.emoji;
+        let displayEmoji = item.emoji;
+        if (customTokens.length > 0) {
+          displayEmoji = customTokens[index % customTokens.length];
+        } else if (adminEmojis) {
+          displayEmoji = adminEmojis[index % adminEmojis.length];
+        }
 
         return (
           <FloatingEmojiNode
@@ -187,6 +202,7 @@ export function AnimatedEmojiBackground() {
             isDark={isDark}
             textColor={textColor}
             isCustom={isCustom}
+            speedFactor={speedFactor}
           />
         );
       })}

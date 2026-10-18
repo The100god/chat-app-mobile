@@ -7,11 +7,13 @@ import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
 import { AppLockModal } from '../src/components/AppLockModal';
 import ToastContainer from '../src/components/Toast';
 import TogetherInviteToast from '../src/components/TogetherInviteToast';
+import { ConfigProvider, useSystemConfig } from '../src/context/ConfigContext';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
   const { mode, theme } = useTheme();
+  const { maintenance } = useSystemConfig();
   const segments = useSegments();
   const router = useRouter();
 
@@ -47,6 +49,30 @@ function RootLayoutNav() {
         backgroundColor={theme.background}
         translucent
       />
+      {maintenance.enabled && (
+        <View
+          style={{
+            backgroundColor: '#e11d48',
+            paddingTop: 44,
+            paddingBottom: 8,
+            paddingHorizontal: 16,
+            zIndex: 9999,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text
+            style={{
+              color: '#ffffff',
+              fontSize: 12,
+              fontWeight: '700',
+              textAlign: 'center',
+            }}
+          >
+            ⚠️ {maintenance.message}
+          </Text>
+        </View>
+      )}
       <Stack
         screenOptions={{
           headerShown: false,
@@ -67,11 +93,13 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <RootLayoutNav />
-        </AuthProvider>
-      </ThemeProvider>
+      <ConfigProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <RootLayoutNav />
+          </AuthProvider>
+        </ThemeProvider>
+      </ConfigProvider>
     </SafeAreaProvider>
   );
 }

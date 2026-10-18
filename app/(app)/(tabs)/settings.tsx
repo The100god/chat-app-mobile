@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useTheme } from '../../../src/context/ThemeContext';
+import { useSystemConfig } from '../../../src/context/ConfigContext';
 import { apiFetch } from '../../../src/utils/apiFetch';
 import { getApiUrl } from '../../../src/utils/apiUrl';
 import {
@@ -82,6 +83,7 @@ function isLightColor(hex: string): boolean {
 export default function SettingsTab() {
   const { user, logout, refreshUserData } = useAuth();
   const { mode, theme, setTheme } = useTheme();
+  const { config, isFeatureEnabled } = useSystemConfig();
 
   const [about, setAbout] = useState(user.about || "Hey there! I'm using Chugli.");
   const [updatingProfile, setUpdatingProfile] = useState(false);
@@ -155,6 +157,7 @@ export default function SettingsTab() {
   // PIN Modal
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [hasPin, setHasPin] = useState(false);
   const [lockTimeout, setLockTimeoutState] = useState<number>(-1);
   const [selectedTimeout, setSelectedTimeout] = useState<number>(-1);
@@ -388,28 +391,30 @@ export default function SettingsTab() {
           <ChevronRight size={18} color={theme.mutedText} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.menuItem, { borderBottomColor: theme.border }]}
-          onPress={() => setIsPinModalOpen(true)}
-        >
-          <View style={[styles.menuIconCircle, { backgroundColor: theme.muted }]}>
-            <ShieldCheck size={18} color={theme.accent} />
-          </View>
-          <View style={styles.menuInfo}>
-            <Text style={[styles.menuTitle, { color: theme.foreground }]}>
-              App Lock PIN
-            </Text>
-            <Text style={[styles.menuSubtitle, { color: theme.mutedText }]}>
-              {hasPin
-                ? `Enabled • ${
-                    LOCK_TIMEOUT_OPTIONS.find((o) => o.value === lockTimeout)?.label ||
-                    'Immediately'
-                  }`
-                : '4-digit PIN security lock'}
-            </Text>
-          </View>
-          <ChevronRight size={18} color={theme.mutedText} />
-        </TouchableOpacity>
+        {isFeatureEnabled('feature_app_lock') && (
+          <TouchableOpacity
+            style={[styles.menuItem, { borderBottomColor: theme.border }]}
+            onPress={() => setIsPinModalOpen(true)}
+          >
+            <View style={[styles.menuIconCircle, { backgroundColor: theme.muted }]}>
+              <ShieldCheck size={18} color={theme.accent} />
+            </View>
+            <View style={styles.menuInfo}>
+              <Text style={[styles.menuTitle, { color: theme.foreground }]}>
+                App Lock PIN
+              </Text>
+              <Text style={[styles.menuSubtitle, { color: theme.mutedText }]}>
+                {hasPin
+                  ? `Enabled • ${
+                      LOCK_TIMEOUT_OPTIONS.find((o) => o.value === lockTimeout)?.label ||
+                      'Immediately'
+                    }`
+                  : '4-digit PIN security lock'}
+              </Text>
+            </View>
+            <ChevronRight size={18} color={theme.mutedText} />
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={styles.menuItemLast}
@@ -548,9 +553,11 @@ export default function SettingsTab() {
         </View>
 
         {/* Animated Background Toggle & Custom Emojis */}
-        <View style={[styles.prefDivider, { backgroundColor: theme.border }]} />
+        {(isFeatureEnabled('feature_animated_bg') && config?.animated_bg?.enabled !== false) && (
+          <>
+            <View style={[styles.prefDivider, { backgroundColor: theme.border }]} />
 
-        <View style={styles.bgToggleRow}>
+            <View style={styles.bgToggleRow}>
           <View style={{ flex: 1, marginRight: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
               <Sparkles size={16} color="#ec4899" style={{ marginRight: 6 }} />
@@ -728,6 +735,8 @@ export default function SettingsTab() {
             </ScrollView>
           </View>
         )}
+          </>
+        )}
       </View>
 
       {/* Storage & Media */}
@@ -894,16 +903,29 @@ export default function SettingsTab() {
         icon={<ShieldCheck size={20} color={theme.accent} />}
         position="center"
       >
-        <TextInput
-          style={[styles.pinInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.foreground }]}
-          placeholder="••••"
-          placeholderTextColor={theme.mutedText}
-          keyboardType="number-pad"
-          maxLength={4}
-          secureTextEntry
-          value={pin}
-          onChangeText={setPin}
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 16 }}>
+          <TextInput
+            style={[styles.pinInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.foreground, marginBottom: 0, width: '75%' }]}
+            placeholder="••••"
+            placeholderTextColor={theme.mutedText}
+            keyboardType="number-pad"
+            maxLength={4}
+            secureTextEntry={!showPin}
+            value={pin}
+            onChangeText={setPin}
+          />
+          <TouchableOpacity
+            onPress={() => setShowPin((p) => !p)}
+            style={{ marginLeft: 10, padding: 8 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            {showPin ? (
+              <EyeOff size={20} color={theme.accent} />
+            ) : (
+              <Eye size={20} color={theme.mutedText} />
+            )}
+          </TouchableOpacity>
+        </View>
 
         <Text style={[styles.inputLabel, { color: theme.mutedText, marginBottom: 8 }]}>
           Auto-Lock Timeout:

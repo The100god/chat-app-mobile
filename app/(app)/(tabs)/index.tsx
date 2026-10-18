@@ -203,7 +203,7 @@ export default function ChatsTab() {
                     ]}
                     numberOfLines={1}
                   >
-                    {hasUnread ? 'New message' : isOnline ? 'Tap to Chugli' : 'No Messages'}
+                    {hasUnread ? 'New message' : isOnline ? 'Tap to Chugli' : 'No Chugli'}
                   </Text>
 
                   {hasUnread ? (

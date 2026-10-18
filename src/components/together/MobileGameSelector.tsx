@@ -9,6 +9,7 @@ import {
   Animated,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useSystemConfig } from '../../context/ConfigContext';
 import { TogetherGameId, GameStats } from '../../states/togetherTypes';
 import {
   Sparkles,
@@ -142,11 +143,12 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
   currentUserId,
 }) => {
   const { theme, mode } = useTheme();
+  const { isGameEnabled } = useSystemConfig();
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [showStatsDashboard, setShowStatsDashboard] = useState<boolean>(false);
 
   const filteredGames = GAMES_REGISTRY.filter(
-    (g) => filterCategory === 'all' || g.category === filterCategory
+    (g) => (filterCategory === 'all' || g.category === filterCategory) && isGameEnabled(g.id)
   );
 
   const getStatsForGame = (gameId: string): GameStats => {
