@@ -745,9 +745,16 @@ export default function ChatDetailScreen() {
             )}
 
             <View style={{ marginLeft: 10, flex: 1 }}>
-              <Text style={[styles.usernameText, { color: theme.foreground }]} numberOfLines={1}>
-                {selectedFriend?.username || 'Chat'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.usernameText, { color: theme.foreground }]} numberOfLines={1}>
+                  {selectedFriend?.name || selectedFriend?.username || 'Chat'}
+                </Text>
+                {selectedFriend?.name && selectedFriend.name !== selectedFriend.username && (
+                  <Text style={{ fontSize: 11, color: theme.mutedText, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                    @{selectedFriend.username}
+                  </Text>
+                )}
+              </View>
               <View style={styles.statusRow}>
                 <View
                   style={[
@@ -780,12 +787,14 @@ export default function ChatDetailScreen() {
           </TouchableOpacity>
 
           {/* Quick Together Invite Button */}
-          <TouchableOpacity
-            style={[styles.togetherBtn, { backgroundColor: `${theme.accent}18` }]}
-            onPress={() => setIsTogetherModalOpen(true)}
-          >
-            <Sparkles size={18} color="#ec4899" />
-          </TouchableOpacity>
+          {isFeatureEnabled('feature_together_hub') && (
+            <TouchableOpacity
+              style={[styles.togetherBtn, { backgroundColor: `${theme.accent}18` }]}
+              onPress={() => setIsTogetherModalOpen(true)}
+            >
+              <Sparkles size={18} color="#ec4899" />
+            </TouchableOpacity>
+          )}
 
           {/* Disappearing Timer Button */}
           <TouchableOpacity

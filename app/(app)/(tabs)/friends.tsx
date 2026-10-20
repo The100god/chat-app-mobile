@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
@@ -24,6 +25,7 @@ import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBa
 interface FriendItem {
   friendId: string;
   username: string;
+  name?: string;
   profilePic?: string;
   unreadMessagesCount?: number;
 }
@@ -31,12 +33,14 @@ interface FriendItem {
 interface UserSearchResult {
   _id: string;
   username: string;
+  name?: string;
   profilePic?: string;
 }
 
 interface FriendRequestItem {
   _id: string;
   username: string;
+  name?: string;
   email?: string;
   profilePic?: string;
 }
@@ -310,6 +314,7 @@ export default function FriendsScreen() {
   const openChatWithFriend = (friend: FriendItem) => {
     setSelectedFriend({
       friendId: friend.friendId,
+      name: friend.name,
       username: friend.username,
       profilePic: friend.profilePic || '',
       unreadMessagesCount: friend.unreadMessagesCount || 0,
@@ -436,8 +441,13 @@ export default function FriendsScreen() {
                     </View>
                     <View style={styles.userInfo}>
                       <Text style={[styles.userName, { color: theme.foreground }]}>
-                        {item.username} {item.friendId === userId ? '(You)' : ''}
+                        {item.name || item.username} {item.friendId === userId ? '(You)' : ''}
                       </Text>
+                      {item.name && item.name !== item.username && item.friendId !== userId && (
+                        <Text style={{ fontSize: 11, color: theme.mutedText, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                          @{item.username}
+                        </Text>
+                      )}
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
                         {isOnline && (
                           <View
@@ -534,10 +544,10 @@ export default function FriendsScreen() {
                     )}
                     <View style={styles.userInfo}>
                       <Text style={[styles.userName, { color: theme.foreground }]}>
-                        {item.username}
+                        {item.name || item.username}
                       </Text>
-                      <Text style={[styles.userEmail, { color: theme.mutedText }]}>
-                        Registered user
+                      <Text style={[styles.userEmail, { color: theme.mutedText, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
+                        @{item.username}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -646,10 +656,10 @@ export default function FriendsScreen() {
                     )}
                     <View style={styles.userInfo}>
                       <Text style={[styles.userName, { color: theme.foreground }]}>
-                        {item.username || 'User'}
+                        {item.name || item.username || 'User'}
                       </Text>
-                      <Text style={[styles.userEmail, { color: theme.mutedText }]}>
-                        {item.email || 'Wants to connect with you'}
+                      <Text style={[styles.userEmail, { color: theme.mutedText, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
+                        @{item.username}
                       </Text>
                     </View>
                     <View style={styles.actionRow}>
@@ -698,10 +708,10 @@ export default function FriendsScreen() {
                   )}
                   <View style={styles.userInfo}>
                     <Text style={[styles.userName, { color: theme.foreground }]}>
-                      {item.username || 'User'}
+                      {item.name || item.username || 'User'}
                     </Text>
                     <Text style={[styles.userEmail, { color: '#f59e0b' }]}>
-                      Pending approval...
+                      @{item.username} • Pending...
                     </Text>
                   </View>
                   <TouchableOpacity

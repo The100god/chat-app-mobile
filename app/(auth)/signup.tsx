@@ -24,6 +24,7 @@ export default function SignupScreen() {
   const { login } = useAuth();
   const { theme } = useTheme();
 
+  const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,8 +34,14 @@ export default function SignupScreen() {
   const [message, setMessage] = useState('');
 
   const handleSignup = async () => {
-    if (!username.trim() || !email.trim() || !password.trim()) {
+    const cleanUsername = username.toLowerCase().trim();
+    if (!name.trim() || !cleanUsername || !email.trim() || !password.trim()) {
       setError('Please fill in all required fields.');
+      return;
+    }
+
+    if (!/^[a-z0-9_]{3,30}$/.test(cleanUsername)) {
+      setError('Username must be 3-30 lowercase characters (letters, numbers, underscores only).');
       return;
     }
 
@@ -52,7 +59,8 @@ export default function SignupScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: username.trim(),
+          name: name.trim(),
+          username: cleanUsername,
           email: email.trim(),
           password,
         }),
@@ -126,7 +134,7 @@ export default function SignupScreen() {
               </View>
             ) : null}
 
-            {/* Username Input */}
+            {/* Display Name Input */}
             <View
               style={[
                 styles.inputWrapper,
@@ -136,14 +144,36 @@ export default function SignupScreen() {
               <User size={19} color={theme.mutedText} style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, { color: theme.foreground }]}
-                placeholder="Username"
+                placeholder="Display Name (e.g. Saurabh Goyal)"
+                placeholderTextColor={theme.mutedText}
+                value={name}
+                onChangeText={(t: string) => {
+                  setName(t);
+                  setError('');
+                }}
+                maxLength={50}
+              />
+            </View>
+
+            {/* Permanent Username Input */}
+            <View
+              style={[
+                styles.inputWrapper,
+                { backgroundColor: theme.input, borderColor: theme.border },
+              ]}
+            >
+              <Text style={{ color: theme.accent, fontSize: 16, paddingLeft: 12, paddingRight: 4, fontWeight: '700' }}>@</Text>
+              <TextInput
+                style={[styles.input, { color: theme.foreground }]}
+                placeholder="Permanent Username (e.g. animelover)"
                 placeholderTextColor={theme.mutedText}
                 value={username}
                 onChangeText={(t: string) => {
-                  setUsername(t);
+                  setUsername(t.toLowerCase().replace(/\s+/g, ''));
                   setError('');
                 }}
                 autoCapitalize="none"
+                autoCorrect={false}
               />
             </View>
 

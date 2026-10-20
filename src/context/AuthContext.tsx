@@ -38,7 +38,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const data = await res.json();
       setUser({
+        _id: data._id,
         username: data.username,
+        name: data.name,
         email: data.email,
         profilePic: data.profilePic || '',
         about: data.about || "Hey there! I'm using Chugli.",

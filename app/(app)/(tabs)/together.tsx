@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
 import { useTheme } from '../../../src/context/ThemeContext';
+import { useSystemConfig } from '../../../src/context/ConfigContext';
 import {
   togetherRoomAtom,
   togetherInvitesAtom,
@@ -65,6 +66,15 @@ const SECTIONS: SectionInfo[] = [
 export default function TogetherTab() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { isFeatureEnabled } = useSystemConfig();
+  const isTogetherEnabled = isFeatureEnabled('feature_together_hub');
+
+  useEffect(() => {
+    if (!isTogetherEnabled) {
+      router.replace('/(app)/(tabs)');
+    }
+  }, [isTogetherEnabled, router]);
+
   const [activeSection, setActiveSection] = useState<TogetherSection>('home');
 
   const [activeRoom] = useAtom(togetherRoomAtom);
@@ -72,6 +82,10 @@ export default function TogetherTab() {
   const [currentUserId] = useAtom(userIdAtom);
   const [friends] = useAtom<Friend[]>(friendsAtom);
   const { createRoom, joinRoom, declineInvite } = useTogetherRoom();
+
+  if (!isTogetherEnabled) {
+    return null;
+  }
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);

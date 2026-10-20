@@ -9,6 +9,7 @@ import {
   Image,
   ActivityIndicator,
   Modal,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../../src/context/AuthContext';
@@ -24,6 +25,7 @@ import {
   X,
   Check,
   ArrowLeft,
+  Lock,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBackground';
@@ -33,7 +35,7 @@ export default function ProfileEditScreen() {
   const { user, refreshUserData } = useAuth();
   const { theme } = useTheme();
 
-  const [username, setUsername] = useState(user.username || '');
+  const [name, setName] = useState(user.name || user.username || '');
   const [about, setAbout] = useState(user.about || "Hey there! I'm using Chugli.");
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingAbout, setIsEditingAbout] = useState(false);
@@ -98,8 +100,11 @@ export default function ProfileEditScreen() {
   };
 
   const handleSaveName = async () => {
-    if (!username.trim()) return;
-    if (username.trim() === user.username) {
+    if (!name.trim()) {
+      showToast('Display name cannot be empty', 'error');
+      return;
+    }
+    if (name.trim() === (user.name || user.username)) {
       setIsEditingName(false);
       return;
     }
@@ -107,18 +112,18 @@ export default function ProfileEditScreen() {
     try {
       const res = await apiFetch(`${getApiUrl()}/api/users/updateProfile`, {
         method: 'PUT',
-        body: JSON.stringify({ username: username.trim() }),
+        body: JSON.stringify({ name: name.trim() }),
       });
       if (res.ok) {
-        showToast('Username updated successfully!', 'success');
+        showToast('Display name updated successfully!', 'success');
         await refreshUserData();
         setIsEditingName(false);
       } else {
         const data = await res.json();
-        showToast(data.message || 'Failed to update username.', 'error');
+        showToast(data.message || 'Failed to update display name.', 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Network error updating username.', 'error');
+      showToast(err.message || 'Network error updating display name.', 'error');
     } finally {
       setUpdatingName(false);
     }
@@ -213,15 +218,16 @@ export default function ProfileEditScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* Username Row */}
+          {/* Display Name Row (Editable) */}
           <View style={styles.usernameRow}>
             {isEditingName ? (
               <View style={styles.inlineEditBox}>
                 <TextInput
                   style={[styles.nameInput, { color: theme.foreground, backgroundColor: theme.input, borderColor: theme.border }]}
-                  value={username}
-                  onChangeText={setUsername}
+                  value={name}
+                  onChangeText={setName}
                   autoFocus
+                  maxLength={50}
                   editable={!updatingName}
                 />
                 <TouchableOpacity
@@ -239,13 +245,25 @@ export default function ProfileEditScreen() {
             ) : (
               <View style={styles.nameDisplayRow}>
                 <Text style={[styles.usernameText, { color: theme.foreground }]}>
-                  {user?.username}
+                  {user?.name || user?.username}
                 </Text>
                 <TouchableOpacity style={styles.pencilIconButton} onPress={() => setIsEditingName(true)}>
                   <Pencil size={20} color={theme.accent} />
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+
+          {/* Permanent Username Handle (Read-only Badge) */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.muted, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginBottom: 8, gap: 6 }}>
+            <Text style={{ color: theme.accent, fontWeight: '700', fontSize: 13 }}>@</Text>
+            <Text style={{ color: theme.foreground, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 13, fontWeight: '600' }}>
+              {user?.username}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginLeft: 4, gap: 3, borderWidth: 1, borderColor: theme.border }}>
+              <Lock size={10} color={theme.accent} />
+              <Text style={{ color: theme.mutedText, fontSize: 10, fontWeight: '600' }}>Permanent</Text>
+            </View>
           </View>
 
           {/* Personalize Subtitle */}
