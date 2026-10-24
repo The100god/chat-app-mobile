@@ -185,11 +185,6 @@ export default function ChatsTab() {
                     >
                       {item.name || item.username} {isSelf ? '(You)' : ''}
                     </Text>
-                    {item.name && item.name !== item.username && !isSelf && (
-                      <Text style={{ fontSize: 11, color: theme.mutedText, marginLeft: 4, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }} numberOfLines={1}>
-                        @{item.username}
-                      </Text>
-                    )}
                   </View>
                   <Text
                     style={[

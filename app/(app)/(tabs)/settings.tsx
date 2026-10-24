@@ -89,6 +89,16 @@ export default function SettingsTab() {
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
 
+  const [displayName, setDisplayName] = useState(user.name || user.username || '');
+  const [updatingName, setUpdatingName] = useState(false);
+  const [nameMsg, setNameMsg] = useState('');
+
+  useEffect(() => {
+    if (user.name || user.username) {
+      setDisplayName(user.name || user.username || '');
+    }
+  }, [user.name, user.username]);
+
   // Notifications Toggle
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
@@ -179,6 +189,44 @@ export default function SettingsTab() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  const handleUpdateName = async () => {
+    const trimmed = displayName.trim();
+    if (!trimmed) {
+      showToast('Display name cannot be empty', 'warning');
+      return;
+    }
+    if (trimmed.length > 50) {
+      showToast('Display name cannot exceed 50 characters', 'warning');
+      return;
+    }
+    if (trimmed === (user.name || user.username)) {
+      showToast('No changes to save', 'info');
+      return;
+    }
+
+    setUpdatingName(true);
+    setNameMsg('');
+    try {
+      const res = await apiFetch(`${getApiUrl()}/api/users/updateProfile`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (res.ok) {
+        setNameMsg('Name updated successfully!');
+        showToast('Display name updated successfully!', 'success');
+        refreshUserData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.message || 'Failed to update name', 'error');
+      }
+    } catch (err: any) {
+      console.error('Update name error:', err);
+      showToast(err.message || 'Failed to update name', 'error');
+    } finally {
+      setUpdatingName(false);
+    }
+  };
 
   const handleUpdateProfile = async () => {
     setUpdatingProfile(true);
@@ -314,15 +362,59 @@ export default function SettingsTab() {
           ) : (
             <View style={[styles.avatarFallback, { backgroundColor: theme.accent }]}>
               <Text style={styles.avatarInitial}>
-                {user.username ? user.username.charAt(0).toUpperCase() : 'U'}
+                {(user.name || user.username) ? (user.name || user.username).charAt(0).toUpperCase() : 'U'}
               </Text>
             </View>
           )}
           <View style={styles.profileDetails}>
             <Text style={[styles.username, { color: theme.foreground }]}>
-              {user.username}
+              {user.name || user.username}
             </Text>
             <Text style={[styles.email, { color: theme.mutedText }]}>{user.email}</Text>
+          </View>
+        </View>
+
+        {/* Display Name */}
+        <View style={[styles.aboutContainer, { marginBottom: 12 }]}>
+          <Text style={[styles.inputLabel, { color: theme.mutedText }]}>Display Name</Text>
+          {nameMsg ? (
+            <Text style={styles.successMsg}>{nameMsg}</Text>
+          ) : null}
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: theme.input,
+                  borderColor: theme.border,
+                  color: theme.foreground,
+                },
+              ]}
+              value={displayName}
+              onChangeText={setDisplayName}
+              placeholder="Display name..."
+              placeholderTextColor={theme.mutedText}
+              maxLength={50}
+            />
+            <TouchableOpacity
+              style={[
+                styles.saveButton,
+                {
+                  backgroundColor:
+                    displayName.trim() && displayName.trim() !== (user.name || user.username)
+                      ? theme.accent
+                      : `${theme.accent}60`,
+                },
+              ]}
+              onPress={handleUpdateName}
+              disabled={updatingName || !displayName.trim() || displayName.trim() === (user.name || user.username)}
+            >
+              {updatingName ? (
+                <ActivityIndicator color="#ffffff" size="small" />
+              ) : (
+                <Check size={18} color="#ffffff" />
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 

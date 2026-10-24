@@ -443,11 +443,6 @@ export default function FriendsScreen() {
                       <Text style={[styles.userName, { color: theme.foreground }]}>
                         {item.name || item.username} {item.friendId === userId ? '(You)' : ''}
                       </Text>
-                      {item.name && item.name !== item.username && item.friendId !== userId && (
-                        <Text style={{ fontSize: 11, color: theme.mutedText, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                          @{item.username}
-                        </Text>
-                      )}
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
                         {isOnline && (
                           <View
@@ -498,7 +493,7 @@ export default function FriendsScreen() {
             <Search size={18} color={theme.mutedText} style={{ marginRight: 8 }} />
             <TextInput
               style={[styles.searchInput, { color: theme.foreground }]}
-              placeholder="Search by username..."
+              placeholder="Search by name..."
               placeholderTextColor={theme.mutedText}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -545,9 +540,6 @@ export default function FriendsScreen() {
                     <View style={styles.userInfo}>
                       <Text style={[styles.userName, { color: theme.foreground }]}>
                         {item.name || item.username}
-                      </Text>
-                      <Text style={[styles.userEmail, { color: theme.mutedText, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
-                        @{item.username}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -658,9 +650,6 @@ export default function FriendsScreen() {
                       <Text style={[styles.userName, { color: theme.foreground }]}>
                         {item.name || item.username || 'User'}
                       </Text>
-                      <Text style={[styles.userEmail, { color: theme.mutedText, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
-                        @{item.username}
-                      </Text>
                     </View>
                     <View style={styles.actionRow}>
                       <TouchableOpacity
@@ -711,7 +700,7 @@ export default function FriendsScreen() {
                       {item.name || item.username || 'User'}
                     </Text>
                     <Text style={[styles.userEmail, { color: '#f59e0b' }]}>
-                      @{item.username} • Pending...
+                      Pending response...
                     </Text>
                   </View>
                   <TouchableOpacity
