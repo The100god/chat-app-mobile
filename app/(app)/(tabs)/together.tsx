@@ -28,6 +28,7 @@ import {
 } from '../../../src/states/togetherTypes';
 import { MobileGameSelector } from '../../../src/components/together/MobileGameSelector';
 import { MobileActivitySelector } from '../../../src/components/together/MobileActivitySelector';
+import { useGamification } from '../../../src/hooks/useGamification';
 import {
   Gamepad2,
   Tv,
@@ -101,6 +102,11 @@ export default function TogetherTab() {
     (f) => String(f.friendId) !== String(currentUserId) && String((f as any)._id || '') !== String(currentUserId)
   );
 
+  const primaryPartner = selectableFriends.find((f) => f.friendId === selectedFriendId) || selectableFriends[0] || (friends || [])[0];
+  const partnerId = primaryPartner?.friendId;
+  const partnerName = primaryPartner?.username;
+  const { gamificationState } = useGamification(partnerId);
+
   // Auto-navigate to room detail when a new room is created or joined
   const prevRoomIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -130,8 +136,8 @@ export default function TogetherTab() {
       pendingType === 'activity'
         ? selectedActivityId || 'would_you_rather'
         : pendingType === 'game'
-        ? selectedGameId
-        : undefined;
+          ? selectedGameId
+          : undefined;
 
     createRoom(pendingType, gameOrActId, targetUserId);
     setIsCreateModalOpen(false);
@@ -377,6 +383,11 @@ export default function TogetherTab() {
         {/* SECTION 2: GAMES */}
         {activeSection === 'games' && (
           <MobileGameSelector
+            currentUserId={currentUserId || undefined}
+            userStats={activeRoom?.sessionStats || {}}
+            partnerId={partnerId}
+            partnerName={partnerName}
+            gamificationState={gamificationState}
             onSelectGame={(gameId) => handleOpenCreateModal('game', gameId)}
           />
         )}
@@ -397,7 +408,7 @@ export default function TogetherTab() {
                 onPress={() => handleOpenCreateModal('watch')}
               >
                 <Plus size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.startSessionText}>Start Watch Room</Text>
+                <Text style={styles.startSessionText}>Watch</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -427,7 +438,7 @@ export default function TogetherTab() {
                 onPress={() => handleOpenCreateModal('music')}
               >
                 <Plus size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.startSessionText}>Start Listen Room</Text>
+                <Text style={styles.startSessionText}> Listen</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

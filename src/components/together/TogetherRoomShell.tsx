@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Image,
+  Platform,
 } from 'react-native';
 import { UIConfirmDialog } from '../UIModal';
 import { useTheme } from '../../context/ThemeContext';
@@ -27,7 +28,9 @@ import {
   Heart,
   ArrowRightLeft,
   MessageSquare,
+  Clock,
 } from 'lucide-react-native';
+import { useRoundTimer } from '../../hooks/useRoundTimer';
 
 import { MobileTicTacToeBoard } from './boards/MobileTicTacToeBoard';
 import { MobileRPSBoard } from './boards/MobileRPSBoard';
@@ -42,6 +45,8 @@ import { MobileListenBoard } from './boards/MobileListenBoard';
 import { MobileGameSelector, GAMES_REGISTRY } from './MobileGameSelector';
 import { TogetherChatBox, TogetherComment } from './TogetherChatBox';
 import { showToast } from '../Toast';
+import { useGamification } from '../../hooks/useGamification';
+import { MobileGameResultModal } from './MobileGameResultModal';
 
 const TYPE_CONFIG: Record<
   string,
@@ -72,6 +77,10 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
   const [copied, setCopied] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'leave' | 'close' | null>(null);
 
+  const partnerId = room?.participants?.find((p) => p !== userId);
+  const { gamificationState, lastResult, showResultModal, dismissResultModal } = useGamification(partnerId);
+  const { timeLeft, isLowTime } = useRoundTimer(room);
+
   if (!room) return null;
 
   const config = TYPE_CONFIG[room.type] || TYPE_CONFIG.game;
@@ -79,7 +88,6 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
     ? GAMES_REGISTRY.find((g) => g.id === room.gameId)
     : undefined;
 
-  const partnerId = room.participants.find((p) => p !== userId);
   const partnerFriend = friends.find((f) => f.friendId === partnerId);
   const partnerName = partnerFriend?.username || (room.participants.length > 1 ? 'Partner' : 'Waiting...');
 
@@ -176,6 +184,22 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
           <Text style={styles.headerTitleText} numberOfLines={1}>
             {gameDef ? gameDef.title : config.label}
           </Text>
+
+          {room.type === 'game' && (
+            <View style={styles.headerBadgesRow}>
+              <View style={styles.lvlBadge}>
+                <Text style={styles.lvlBadgeText}>
+                  Lvl {Number((room.state as any)?.currentLevel || 1)}
+                </Text>
+              </View>
+              <View style={[styles.roundTimerChip, isLowTime && styles.roundTimerChipLow]}>
+                <Clock size={11} color={isLowTime ? '#ffffff' : '#fbbf24'} />
+                <Text style={[styles.roundTimerText, isLowTime && styles.roundTimerTextLow]}>
+                  {timeLeft}s
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         <View style={styles.headerRight}>
@@ -255,6 +279,9 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
                     selectedGameId={room.gameId}
                     userStats={room.sessionStats}
                     currentUserId={userId || undefined}
+                    partnerId={partnerId}
+                    partnerName={partnerName}
+                    gamificationState={gamificationState}
                     onSelectGame={(newGameId) => {
                       switchGame(newGameId);
                       setIsChangingGame(false);
@@ -450,6 +477,15 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmAction(null)}
       />
+
+      {/* Gamification Celebration & Match Result Modal */}
+      <MobileGameResultModal
+        isOpen={showResultModal}
+        result={lastResult}
+        currentUserId={userId || ''}
+        partnerName={partnerName}
+        onClose={dismissResultModal}
+      />
     </ScrollView>
   );
 };
@@ -490,6 +526,48 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
+  },
+  headerBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  lvlBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+  },
+  lvlBadgeText: {
+    color: '#fbbf24',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  roundTimerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.4)',
+  },
+  roundTimerChipLow: {
+    backgroundColor: '#ef4444',
+    borderColor: '#fca5a5',
+  },
+  roundTimerText: {
+    color: '#fbbf24',
+    fontSize: 11,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  roundTimerTextLow: {
+    color: '#ffffff',
   },
   headerRight: {
     flexDirection: 'row',

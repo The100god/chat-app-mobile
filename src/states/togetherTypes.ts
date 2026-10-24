@@ -289,3 +289,111 @@ export interface TogetherInvite {
   hostProfilePic?: string;
   createdAt: number;
 }
+
+// ─── Gamification Types ───
+
+export interface PairGameProgressItem {
+  gameId: string;
+  title: string;
+  category: string;
+  icon: string;
+  description?: string;
+  isStarter: boolean;
+  order: number;
+  isUnlocked: boolean;
+  unlockedAt?: string | null;
+  currentLevel: number;
+  highestLevelAchieved: number;
+  maximumLevel: number;
+  combinedPoints: number;
+  combinedWins: number;
+  combinedPlays: number;
+  lastPlayedAt?: string | null;
+  unlockRequirements: {
+    pointsRequired: number;
+    requiredPreviousGames: {
+      gameId: string;
+      minWins: number;
+      minPlays: number;
+    }[];
+  };
+  currentLevelConfig?: {
+    level: number;
+    timeSec?: number;
+    gridConfig?: Record<string, any>;
+    courtyardLayout?: {
+      preset?: string;
+      catcherSpeed?: number;
+      runnerSpeed?: number;
+      obstacles?: Array<{ x: number; y: number; w: number; h: number; type?: string }>;
+    };
+    rewards?: {
+      basePointsPerPlay: number;
+      winBonusPoints: number;
+      completionBonusPoints: number;
+    };
+  };
+}
+
+export interface PairGamificationSummary {
+  pairId: string;
+  totalPoints: number;
+  totalCombinedPoints?: number;
+  totalWins: number;
+  totalCombinedWins?: number;
+  totalPlays: number;
+  totalCombinedPlays?: number;
+  currentStreak: number;
+  highestStreak: number;
+  unlockedGamesCount: number;
+  totalGamesCount: number;
+  nextGameToUnlock: {
+    gameId: string;
+    title: string;
+    pointsRequired: number;
+    pointsRemaining: number;
+    missingPrerequisites: string[];
+  } | null;
+}
+
+export interface PairGamificationState {
+  pairId: string;
+  partnerId: string;
+  version: number;
+  summary: PairGamificationSummary;
+  games: PairGameProgressItem[];
+}
+
+export interface GamificationResultPayload {
+  matchId: string;
+  gameId: string;
+  pairId: string;
+  rewards: Record<
+    string,
+    {
+      userId: string;
+      isWinner: boolean;
+      pointsAwarded: number;
+      breakdown: {
+        basePlay: number;
+        winBonus: number;
+        levelBonus: number;
+        streakBonus: number;
+      };
+      newTotalPoints: number;
+    }
+  >;
+  levelInfo: {
+    previousLevel: number;
+    currentLevel: number;
+    leveledUp: boolean;
+    maximumLevel: number;
+  };
+  newlyUnlockedGames: Array<{
+    gameId: string;
+    title: string;
+    icon: string;
+  }>;
+  summary: PairGamificationSummary;
+}
+

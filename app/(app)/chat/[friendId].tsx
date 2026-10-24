@@ -56,9 +56,11 @@ import {
   Heart,
   RefreshCw,
   AlertCircle,
+  Trophy,
 } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBackground';
+import { useGamification } from '../../../src/hooks/useGamification';
 
 const DISAPPEAR_OPTIONS = [
   { label: 'Off', value: 0 },
@@ -119,6 +121,7 @@ export default function ChatDetailScreen() {
   const [disappearDuration, setDisappearDuration] = useAtom(disappearDurationAtom);
   const { isUserOnline } = useOnlineStatus();
   const isFriendOnline = isUserOnline(friendId);
+  const { gamificationState } = useGamification(friendId as string);
 
   const [chatId, setChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -148,7 +151,7 @@ export default function ChatDetailScreen() {
         clearInterval(recordIntervalRef.current);
       }
       if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        recordingRef.current.stopAndUnloadAsync().catch(() => { });
       }
     };
   }, []);
@@ -205,7 +208,7 @@ export default function ChatDetailScreen() {
             senderId: friendId,
             receiverId: currentUserId,
           }),
-        }).catch(() => {});
+        }).catch(() => { });
 
         const msgRes = await apiFetch(
           `${getApiUrl()}/api/message/${activeChatId}?userId=${currentUserId}`
@@ -370,7 +373,7 @@ export default function ChatDetailScreen() {
           senderId: friendId,
           receiverId: currentUserId,
         }),
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [messages, chatId, friendId, currentUserId]);
 
@@ -510,7 +513,7 @@ export default function ChatDetailScreen() {
       if (recordingRef.current) {
         try {
           await recordingRef.current.stopAndUnloadAsync();
-        } catch (_) {}
+        } catch (_) { }
         recordingRef.current = null;
       }
 
@@ -533,7 +536,7 @@ export default function ChatDetailScreen() {
       if (stopRequestedRef.current) {
         try {
           await recording.stopAndUnloadAsync();
-        } catch (_) {}
+        } catch (_) { }
         isStartingRecordingRef.current = false;
         return;
       }
@@ -744,18 +747,25 @@ export default function ChatDetailScreen() {
               </View>
             )}
 
-            <View style={{ marginLeft: 10, flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.usernameText, { color: theme.foreground }]} numberOfLines={1}>
-                  {selectedFriend?.name || selectedFriend?.username || 'Chat'}
-                </Text>
-                {selectedFriend?.name && selectedFriend.name !== selectedFriend.username && (
-                  <Text style={{ fontSize: 11, color: theme.mutedText, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                    @{selectedFriend.username}
-                  </Text>
-                )}
-              </View>
+            <View style={{ marginLeft: 10, flex: 1, justifyContent: 'center' }}>
+              <Text style={[styles.usernameText, { color: theme.foreground }]} numberOfLines={1}>
+                {selectedFriend?.name || selectedFriend?.username || 'Chat'}
+              </Text>
               <View style={styles.statusRow}>
+                {selectedFriend?.username && (
+                  <>
+                    <Text
+                      style={[
+                        styles.usernameHandleText,
+                        { color: theme.mutedText },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      @{selectedFriend.username}
+                    </Text>
+                    <Text style={[styles.statusDivider, { color: theme.mutedText }]}>•</Text>
+                  </>
+                )}
                 <View
                   style={[
                     styles.statusDot,
@@ -763,8 +773,8 @@ export default function ChatDetailScreen() {
                       backgroundColor: isTyping
                         ? theme.accent
                         : isFriendOnline
-                        ? '#22c55e'
-                        : '#94a3b8',
+                          ? '#22c55e'
+                          : '#94a3b8',
                     },
                   ]}
                 />
@@ -775,8 +785,8 @@ export default function ChatDetailScreen() {
                       color: isTyping
                         ? theme.accent
                         : isFriendOnline
-                        ? '#22c55e'
-                        : theme.mutedText,
+                          ? '#22c55e'
+                          : theme.mutedText,
                     },
                   ]}
                 >
@@ -786,23 +796,33 @@ export default function ChatDetailScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Quick Together Invite Button */}
+          {/* Quick Together Invite & Points Button */}
           {isFeatureEnabled('feature_together_hub') && (
             <TouchableOpacity
-              style={[styles.togetherBtn, { backgroundColor: `${theme.accent}18` }]}
+              style={[
+                styles.togetherPointsBtn,
+                {
+                  backgroundColor: `${theme.accent}15`,
+                  borderColor: `${theme.accent}35`,
+                },
+              ]}
               onPress={() => setIsTogetherModalOpen(true)}
+              activeOpacity={0.8}
             >
-              <Sparkles size={18} color="#ec4899" />
+              <Trophy size={13} color="#fbbf24" />
+              <Text style={[styles.togetherPointsVal, { color: '#fbbf24' }]}>
+                {gamificationState?.summary?.totalCombinedPoints ?? gamificationState?.summary?.totalPoints ?? 0}
+              </Text>
             </TouchableOpacity>
           )}
 
           {/* Disappearing Timer Button */}
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.headerIconBtn}
             onPress={() => setIsTimerModalOpen(true)}
           >
             <Clock size={20} color={disappearDuration > 0 ? '#ec4899' : theme.mutedText} />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Settings Menu Button */}
           <TouchableOpacity
@@ -856,9 +876,9 @@ export default function ChatDetailScreen() {
                     isMe
                       ? [styles.myBubble, { backgroundColor: theme.bubbleSent }]
                       : [
-                          styles.theirBubble,
-                          { backgroundColor: theme.bubbleReceived, borderColor: theme.border },
-                        ],
+                        styles.theirBubble,
+                        { backgroundColor: theme.bubbleReceived, borderColor: theme.border },
+                      ],
                   ]}
                   onLongPress={() => setSelectedMsgForAction(item)}
                   activeOpacity={0.9}
@@ -1251,8 +1271,8 @@ export default function ChatDetailScreen() {
               </TouchableOpacity>
 
               {selectedMsgForAction?.sender === currentUserId ||
-              (typeof selectedMsgForAction?.sender === 'object' &&
-                selectedMsgForAction?.sender?._id === currentUserId) ? (
+                (typeof selectedMsgForAction?.sender === 'object' &&
+                  selectedMsgForAction?.sender?._id === currentUserId) ? (
                 <TouchableOpacity
                   style={[styles.deleteOptionRow, { backgroundColor: theme.muted, marginTop: 8 }]}
                   onPress={() => selectedMsgForAction && handleDeleteMessage(selectedMsgForAction, true)}
@@ -1452,6 +1472,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 2,
   },
+  usernameHandleText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  statusDivider: {
+    fontSize: 10,
+    opacity: 0.5,
+    marginRight: 5,
+  },
   statusDot: {
     width: 7,
     height: 7,
@@ -1461,6 +1492,21 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 11,
     fontWeight: '500',
+  },
+  togetherPointsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginRight: 4,
+  },
+  togetherPointsVal: {
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   togetherBtn: {
     padding: 8,

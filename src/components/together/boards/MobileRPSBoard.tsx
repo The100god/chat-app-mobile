@@ -19,7 +19,9 @@ import {
   Users,
   XCircle,
   Handshake,
+  Clock,
 } from 'lucide-react-native';
+import { useRoundTimer } from '../../../hooks/useRoundTimer';
 
 interface MobileRPSBoardProps {
   room: TogetherRoom;
@@ -68,6 +70,8 @@ export const MobileRPSBoard: React.FC<MobileRPSBoardProps> = ({
       total: 0,
     };
 
+  const { timeLeft, isLowTime } = useRoundTimer(room);
+
   const handleSelectChoice = (choice: 'rock' | 'paper' | 'scissors') => {
     if (status === 'round_ended') return;
     onEmit('together:rps:choice', { roomId: room.roomId, choice });
@@ -100,7 +104,13 @@ export const MobileRPSBoard: React.FC<MobileRPSBoardProps> = ({
             />
             <View>
               <Text style={[styles.gameTitle, { color: theme.foreground }]}>Rock Paper Scissors</Text>
-              <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>Round {round}</Text>
+              <View style={styles.subtitleRow}>
+                <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>Round {round}</Text>
+                <View style={[styles.timerChip, isLowTime && styles.timerChipLow]}>
+                  <Clock size={10} color={isLowTime ? '#ffffff' : '#fbbf24'} />
+                  <Text style={[styles.timerText, isLowTime && styles.timerTextLow]}>{timeLeft}s</Text>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -314,6 +324,35 @@ const styles = StyleSheet.create({
   gameSubtitle: {
     fontSize: 10,
     fontWeight: '600',
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  timerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+  },
+  timerChipLow: {
+    backgroundColor: '#ef4444',
+    borderColor: '#fca5a5',
+  },
+  timerText: {
+    color: '#fbbf24',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  timerTextLow: {
+    color: '#ffffff',
   },
   smallIconBtn: {
     padding: 6,

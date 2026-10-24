@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useSystemConfig } from '../../context/ConfigContext';
-import { TogetherGameId, GameStats } from '../../states/togetherTypes';
+import { TogetherGameId, GameStats, PairGamificationState } from '../../states/togetherTypes';
 import {
   Sparkles,
   Trophy,
@@ -19,7 +19,12 @@ import {
   Gamepad2,
   Play,
   BarChart3,
+  Lock,
+  Flame,
+  Zap,
+  Check,
 } from 'lucide-react-native';
+import { showToast } from '../Toast';
 
 export interface TogetherGameDefinition {
   id: TogetherGameId;
@@ -134,6 +139,9 @@ interface MobileGameSelectorProps {
   onSelectGame: (gameId: TogetherGameId) => void;
   userStats?: Record<string, GameStats>;
   currentUserId?: string;
+  partnerId?: string | null;
+  partnerName?: string;
+  gamificationState?: PairGamificationState | null;
 }
 
 export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
@@ -141,6 +149,9 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
   onSelectGame,
   userStats = {},
   currentUserId,
+  partnerId,
+  partnerName,
+  gamificationState,
 }) => {
   const { theme, mode } = useTheme();
   const { isGameEnabled } = useSystemConfig();
@@ -153,38 +164,67 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
 
   const getStatsForGame = (gameId: string): GameStats => {
     if (currentUserId && userStats[`${gameId}_${currentUserId}`]) {
-      return userStats[`${gameId}_${currentUserId}`];
+      const s = userStats[`${gameId}_${currentUserId}`];
+      if (s.total > 0 || s.wins > 0) return s;
     }
     if (userStats[gameId]) {
-      return userStats[gameId];
+      const s = userStats[gameId];
+      if (s.total > 0 || s.wins > 0) return s;
+    }
+    if (gamificationState?.games) {
+      const gProg = gamificationState.games.find((g) => g.gameId === gameId);
+      if (gProg && (gProg.combinedPlays > 0 || gProg.combinedWins > 0)) {
+        const wins = gProg.combinedWins || 0;
+        const total = gProg.combinedPlays || 0;
+        const losses = Math.max(0, total - wins);
+        return { wins, losses, ties: 0, total };
+      }
     }
     return { wins: 0, losses: 0, ties: 0, total: 0 };
   };
 
-  const totalStats = GAMES_REGISTRY.reduce(
-    (acc, g) => {
-      const st = getStatsForGame(g.id);
-      return {
-        wins: acc.wins + st.wins,
-        losses: acc.losses + st.losses,
-        ties: acc.ties + st.ties,
-        total: acc.total + st.total,
-      };
-    },
-    { wins: 0, losses: 0, ties: 0, total: 0 }
-  );
+  const computedTotalStats = currentUserId && userStats[currentUserId] && userStats[currentUserId].total > 0
+    ? userStats[currentUserId]
+    : GAMES_REGISTRY.reduce(
+        (acc, g) => {
+          const st = getStatsForGame(g.id);
+          return {
+            wins: acc.wins + st.wins,
+            losses: acc.losses + st.losses,
+            ties: acc.ties + st.ties,
+            total: acc.total + st.total,
+          };
+        },
+        { wins: 0, losses: 0, ties: 0, total: 0 }
+      );
+
+  const totalStats: GameStats =
+    computedTotalStats.total > 0
+      ? computedTotalStats
+      : gamificationState?.summary
+      ? {
+          wins: gamificationState.summary.totalCombinedWins ?? gamificationState.summary.totalWins ?? 0,
+          total: gamificationState.summary.totalCombinedPlays ?? gamificationState.summary.totalPlays ?? 0,
+          losses: Math.max(
+            0,
+            (gamificationState.summary.totalCombinedPlays ?? gamificationState.summary.totalPlays ?? 0) -
+              (gamificationState.summary.totalCombinedWins ?? gamificationState.summary.totalWins ?? 0)
+          ),
+          ties: 0,
+        }
+      : computedTotalStats;
 
   const winRate =
     totalStats.total > 0 ? Math.round((totalStats.wins / totalStats.total) * 100) : 0;
 
   return (
     <View style={styles.container}>
-      {/* Category Filter Tabs & Stats Toggle Header */}
+      {/* Category Filter Tabs */}
       <View style={styles.topFilterBar}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{ flex: 1 }}
+          style={{ width: '100%' }}
           contentContainerStyle={styles.categoryScroll}
         >
           {[
@@ -223,27 +263,115 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
             );
           })}
         </ScrollView>
-
-        <TouchableOpacity
-          style={[
-            styles.statsToggleBtn,
-            { backgroundColor: theme.card, borderColor: theme.border },
-            showStatsDashboard && { backgroundColor: '#8b5cf6', borderColor: '#a855f7' },
-          ]}
-          onPress={() => setShowStatsDashboard(!showStatsDashboard)}
-        >
-          <BarChart3 size={14} color={showStatsDashboard ? '#ffffff' : theme.foreground} />
-          <Text
-            style={[
-              styles.statsToggleText,
-              { color: theme.foreground },
-              showStatsDashboard && { color: '#ffffff', fontWeight: '800' },
-            ]}
-          >
-            Stats
-          </Text>
-        </TouchableOpacity>
       </View>
+
+      {/* Pair Progression Box - Matching UI spec & Theme-aware */}
+      {gamificationState && (
+        <View
+          style={[
+            styles.pairProgressionCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: mode === 'light' ? 'rgba(217, 119, 6, 0.35)' : 'rgba(251, 191, 36, 0.35)',
+            },
+          ]}
+        >
+          <View style={styles.progressionRow}>
+            {/* Left: Trophy Squircle */}
+            <View
+              style={[
+                styles.trophySquircle,
+                mode === 'light' && {
+                  backgroundColor: '#6366f1',
+                  borderColor: '#d97706',
+                },
+              ]}
+            >
+              <Trophy size={20} color="#ffffff" />
+            </View>
+
+            {/* Middle: Title & Stats */}
+            <View style={styles.progressionInfo}>
+              <View style={styles.progressionTitleLine}>
+                <Text style={[styles.progressionMainTitle, { color: theme.foreground }]}>
+                  Together Progression
+                </Text>
+                {partnerName && (
+                  <Text style={[styles.progressionPartnerName, mode === 'light' && { color: '#d97706' }]}>
+                    with {partnerName}
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.progressionMetricsLine}>
+                <Text style={[styles.progressionPoints, mode === 'light' && { color: '#d97706' }]}>
+                  ⚡ {gamificationState.summary.totalCombinedPoints ?? gamificationState.summary.totalPoints ?? 0} Points
+                </Text>
+                <Text style={[styles.progressionSep, { color: theme.mutedText }]}>•</Text>
+                <Text style={[styles.progressionWins, mode === 'light' && { color: '#16a34a' }]}>
+                  {gamificationState.summary.totalCombinedWins ?? gamificationState.summary.totalWins ?? 0} Wins
+                </Text>
+                <Text style={[styles.progressionSep, { color: theme.mutedText }]}>•</Text>
+                <Text style={[styles.progressionUnlocked, mode === 'light' && { color: '#4f46e5' }]}>
+                  {gamificationState.summary.unlockedGamesCount} / 7 Games Unlocked
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Next Goal / Progress Bar */}
+          {(() => {
+            const nextLocked = gamificationState.games?.find((g) => !g.isUnlocked);
+            if (!nextLocked) {
+              return (
+                <View style={[styles.goalSectionAllUnlocked, { borderTopColor: theme.border }]}>
+                  <Text style={[styles.allUnlockedLabel, mode === 'light' && { color: '#16a34a' }]}>
+                    All Games Unlocked!
+                  </Text>
+                  <Text style={[styles.allUnlockedSub, { color: theme.mutedText }]}>
+                    Keep leveling up to Level 20!
+                  </Text>
+                </View>
+              );
+            }
+            const ptsNeeded = nextLocked.unlockRequirements?.pointsRequired || 0;
+            const currentPts = gamificationState.summary.totalCombinedPoints ?? gamificationState.summary.totalPoints ?? 0;
+            const pct = Math.min(100, Math.round((currentPts / (ptsNeeded || 1)) * 100));
+
+            return (
+              <View style={[styles.goalSection, { borderTopColor: theme.border }]}>
+                <View style={styles.goalTextRow}>
+                  <Text style={[styles.goalNextName, { color: theme.mutedText }]}>
+                    Next: {nextLocked.title}
+                  </Text>
+                  <Text style={[styles.goalPtsBadge, mode === 'light' && { color: '#d97706' }]}>
+                    {currentPts} / {ptsNeeded} pts ({pct}%)
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.progressBarTrack,
+                    {
+                      backgroundColor: mode === 'light' ? '#e2e8f0' : 'rgba(255, 255, 255, 0.12)',
+                      borderColor: mode === 'light' ? '#cbd5e1' : 'rgba(255, 255, 255, 0.1)',
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      {
+                        width: `${pct}%`,
+                        backgroundColor: mode === 'light' ? '#d97706' : '#fbbf24',
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            );
+          })()}
+        </View>
+      )}
 
       {/* Stats Dashboard */}
       {showStatsDashboard && (
@@ -329,19 +457,14 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
                       <Text style={{ color: '#eab308', fontWeight: '700' }}>{st.ties}T</Text>
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.playMiniBtn,
-                      {
-                        backgroundColor: theme.accent,
-                        borderColor: mode === 'aurora' ? '#00bcd4' : theme.accent,
-                      },
-                    ]}
-                    onPress={() => onSelectGame(game.id)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.playMiniBtnText}>Play</Text>
-                  </TouchableOpacity>
+                  <View style={styles.perGameTotalBadge}>
+                    <Text style={[styles.perGameTotalNum, { color: theme.foreground }]}>
+                      {st.total}
+                    </Text>
+                    <Text style={[styles.perGameTotalLabel, { color: theme.mutedText }]}>
+                      {st.total === 1 ? 'game' : 'games'}
+                    </Text>
+                  </View>
                 </View>
               );
             })}
@@ -349,11 +472,41 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
         </View>
       )}
 
+      {/* Section Header Row with Stats Toggle Button */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={[styles.sectionHeading, { color: theme.foreground }]}>
+          Games ({filteredGames.length})
+        </Text>
+        <TouchableOpacity
+          style={[
+            styles.statsToggleChip,
+            { backgroundColor: theme.card, borderColor: theme.border },
+            showStatsDashboard && { backgroundColor: '#8b5cf6', borderColor: '#a855f7' },
+          ]}
+          onPress={() => setShowStatsDashboard(!showStatsDashboard)}
+          activeOpacity={0.8}
+        >
+          <BarChart3 size={13} color={showStatsDashboard ? '#ffffff' : theme.foreground} />
+          <Text
+            style={[
+              styles.statsToggleChipText,
+              { color: theme.foreground },
+              showStatsDashboard && { color: '#ffffff', fontWeight: '800' },
+            ]}
+          >
+            {showStatsDashboard ? 'Hide Stats' : 'Game Stats'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Games Grid */}
       <View style={styles.gamesGrid}>
         {filteredGames.map((game) => {
           const isSelected = selectedGameId === game.id;
           const stats = getStatsForGame(game.id);
+          const progress = gamificationState?.games.find((g) => g.gameId === game.id);
+          const isUnlocked = progress ? progress.isUnlocked : true;
+          const currentLevel = progress ? progress.currentLevel : 1;
 
           return (
             <TouchableOpacity
@@ -361,12 +514,22 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
               style={[
                 styles.gameCard,
                 { backgroundColor: theme.card, borderColor: theme.border },
+                !isUnlocked && { opacity: 0.75, borderColor: 'rgba(244, 63, 94, 0.3)' },
                 isSelected && {
                   borderColor: theme.accent,
                   backgroundColor: `${theme.accent}15`,
                 },
               ]}
-              onPress={() => onSelectGame(game.id)}
+              onPress={() => {
+                if (!isUnlocked) {
+                  showToast(
+                    `Locked: Earn ${progress?.unlockRequirements?.pointsRequired || 0} Pair Points to unlock ${game.title}!`,
+                    'warning'
+                  );
+                  return;
+                }
+                onSelectGame(game.id);
+              }}
               activeOpacity={0.8}
             >
               {/* Active Glow Top Bar */}
@@ -380,24 +543,38 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
                   style={[
                     styles.gameIconBadge,
                     { backgroundColor: game.badgeGradient[0] },
+                    !isUnlocked && { opacity: 0.6 },
                   ]}
                 >
                   <Image source={game.iconAsset} style={styles.gameIconImage} />
                 </View>
                 <View style={styles.gameTitleBox}>
                   <View style={styles.titleRow}>
-                    <Text style={[styles.gameTitle, { color: theme.foreground }]}>
-                      {game.title}
-                    </Text>
-                    {isSelected && (
-                      <View style={[styles.selectedPill, { backgroundColor: theme.accent }]}>
-                        <Text style={styles.selectedPillText}>Selected</Text>
-                      </View>
-                    )}
+                    <View style={styles.titleContainer}>
+                      <Text style={[styles.gameTitle, { color: theme.foreground }]} numberOfLines={1}>
+                        {game.title}
+                      </Text>
+                      <Text style={[styles.gameSubtitle, { color: theme.mutedText }]} numberOfLines={1}>
+                        {game.subtitle}
+                      </Text>
+                    </View>
+                    <View style={styles.badgeColumn}>
+                      {isUnlocked ? (
+                        <View style={styles.levelBadge}>
+                          <Text style={styles.levelBadgeText}>Lvl {currentLevel}</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.lockedBadge}>
+                          <Text style={styles.lockedBadgeText}>Locked</Text>
+                        </View>
+                      )}
+                      {isSelected && (
+                        <View style={[styles.selectedPill, { backgroundColor: theme.accent }]}>
+                          <Text style={styles.selectedPillText}>Active</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                  <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>
-                    {game.subtitle}
-                  </Text>
                 </View>
               </View>
 
@@ -405,6 +582,17 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
               <Text style={[styles.gameDescription, { color: theme.mutedText }]}>
                 {game.description}
               </Text>
+
+              {/* Locked Notice Banner */}
+              {!isUnlocked && (
+                <View style={styles.lockedNotice}>
+                  <Lock size={13} color="#f43f5e" />
+                  <Text style={styles.lockedNoticeText}>
+                    Requires {progress?.unlockRequirements?.pointsRequired || 0} Pair Points
+                    {progress?.unlockRequirements?.requiredPreviousGames?.length ? ' & prerequisite wins' : ''}
+                  </Text>
+                </View>
+              )}
 
               {/* Stats Bar */}
               <View
@@ -433,65 +621,87 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
               <TouchableOpacity
                 style={[
                   styles.playButton,
-                  {
-                    backgroundColor: isSelected
-                      ? theme.accent
-                      : mode === 'dark'
-                      ? 'rgba(139, 92, 246, 0.22)'
-                      : mode === 'aurora'
-                      ? 'rgba(0, 188, 212, 0.22)'
-                      : 'rgba(0, 168, 132, 0.12)',
-                    borderColor: isSelected
-                      ? theme.accent
-                      : mode === 'dark'
-                      ? 'rgba(139, 92, 246, 0.55)'
-                      : mode === 'aurora'
-                      ? 'rgba(0, 188, 212, 0.55)'
-                      : 'rgba(0, 168, 132, 0.4)',
-                  },
+                  !isUnlocked
+                    ? styles.lockedButton
+                    : {
+                        backgroundColor: isSelected
+                          ? theme.accent
+                          : mode === 'dark'
+                          ? 'rgba(139, 92, 246, 0.22)'
+                          : mode === 'aurora'
+                          ? 'rgba(0, 188, 212, 0.22)'
+                          : 'rgba(0, 168, 132, 0.12)',
+                        borderColor: isSelected
+                          ? theme.accent
+                          : mode === 'dark'
+                          ? 'rgba(139, 92, 246, 0.55)'
+                          : mode === 'aurora'
+                          ? 'rgba(0, 188, 212, 0.55)'
+                          : 'rgba(0, 168, 132, 0.4)',
+                      },
                 ]}
-                onPress={() => onSelectGame(game.id)}
+                onPress={() => {
+                  if (!isUnlocked) {
+                    showToast(
+                      `Locked: Earn ${progress?.unlockRequirements?.pointsRequired || 0} Pair Points to unlock ${game.title}!`,
+                      'warning'
+                    );
+                    return;
+                  }
+                  onSelectGame(game.id);
+                }}
                 activeOpacity={0.75}
               >
-                <Play
-                  size={14}
-                  color={
-                    isSelected
-                      ? '#ffffff'
-                      : mode === 'dark'
-                      ? '#c4b5fd'
-                      : mode === 'aurora'
-                      ? '#22d3ee'
-                      : theme.accent
-                  }
-                  fill={
-                    isSelected
-                      ? '#ffffff'
-                      : mode === 'dark'
-                      ? '#c4b5fd'
-                      : mode === 'aurora'
-                      ? '#22d3ee'
-                      : theme.accent
-                  }
-                  style={{ marginRight: 6 }}
-                />
-                <Text
-                  style={[
-                    styles.playButtonText,
-                    {
-                      color: isSelected
-                        ? '#ffffff'
-                        : mode === 'dark'
-                        ? '#ffffff'
-                        : mode === 'aurora'
-                        ? '#e0f7fa'
-                        : theme.foreground,
-                    },
-                    isSelected && { fontWeight: '800' },
-                  ]}
-                >
-                  {isSelected ? 'Selected Game' : 'Play'}
-                </Text>
+                {isUnlocked ? (
+                  <>
+                    {isSelected ? (
+                      <Check size={15} color="#ffffff" strokeWidth={3} style={{ marginRight: 6 }} />
+                    ) : (
+                      <Play
+                        size={14}
+                        color={
+                          mode === 'dark'
+                            ? '#c4b5fd'
+                            : mode === 'aurora'
+                            ? '#22d3ee'
+                            : theme.accent
+                        }
+                        fill={
+                          mode === 'dark'
+                            ? '#c4b5fd'
+                            : mode === 'aurora'
+                            ? '#22d3ee'
+                            : theme.accent
+                        }
+                        style={{ marginRight: 6 }}
+                      />
+                    )}
+                    <Text
+                      style={[
+                        styles.playButtonText,
+                        {
+                          color: isSelected
+                            ? '#ffffff'
+                            : mode === 'dark'
+                            ? '#ffffff'
+                            : mode === 'aurora'
+                            ? '#e0f7fa'
+                            : theme.foreground,
+                        },
+                        isSelected && { fontWeight: '800' },
+                      ]}
+                    >
+                      {isSelected ? 'Selected Game' : 'Play'}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Lock size={14} color="#94a3b8" style={{ marginRight: 6 }} />
+                    <Text style={[styles.playButtonText, { color: '#94a3b8' }]}>
+                      Locked
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             </TouchableOpacity>
           );
@@ -653,6 +863,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 1,
   },
+  perGameTotalBadge: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingLeft: 8,
+  },
+  perGameTotalNum: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  perGameTotalLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
   playMiniBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -707,6 +931,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  titleContainer: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  badgeColumn: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
   gameTitle: {
     fontSize: 16,
@@ -765,5 +997,194 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginTop: 4,
+  },
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statsToggleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 5,
+  },
+  statsToggleChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  pairProgressionCard: {
+    marginHorizontal: 4,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    gap: 6,
+  },
+  progressionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  trophySquircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#6366f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.4)',
+    elevation: 3,
+  },
+  progressionInfo: {
+    flex: 1,
+  },
+  progressionTitleLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  progressionMainTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  progressionPartnerName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fbbf24',
+  },
+  progressionMetricsLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginTop: 3,
+  },
+  progressionPoints: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#fbbf24',
+  },
+  progressionSep: {
+    fontSize: 11,
+  },
+  progressionWins: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#10b981',
+  },
+  progressionUnlocked: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#818cf8',
+  },
+  goalSection: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  goalSectionAllUnlocked: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  goalTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  goalNextName: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  goalPtsBadge: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#fbbf24',
+    fontVariant: ['tabular-nums'],
+  },
+  progressBarTrack: {
+    width: '100%',
+    height: 7,
+    borderRadius: 4,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  allUnlockedLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#10b981',
+    textTransform: 'uppercase',
+  },
+  allUnlockedSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  levelBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  levelBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fbbf24',
+  },
+  lockedBadge: {
+    backgroundColor: 'rgba(244, 63, 94, 0.15)',
+    borderColor: 'rgba(244, 63, 94, 0.35)',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  lockedBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#f43f5e',
+  },
+  lockedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.2)',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  lockedNoticeText: {
+    fontSize: 11,
+    color: '#f43f5e',
+    fontWeight: '600',
+    flex: 1,
+  },
+  lockedButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
 });
