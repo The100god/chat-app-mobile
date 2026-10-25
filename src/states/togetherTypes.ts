@@ -308,6 +308,14 @@ export interface PairGameProgressItem {
   combinedPoints: number;
   combinedWins: number;
   combinedPlays: number;
+  pairStats?: {
+    myWins: number;
+    partnerWins: number;
+    ties: number;
+    totalPlays: number;
+  };
+  userWins?: Record<string, number>;
+  ties?: number;
   lastPlayedAt?: string | null;
   unlockRequirements: {
     pointsRequired: number;
@@ -343,6 +351,10 @@ export interface PairGamificationSummary {
   totalCombinedWins?: number;
   totalPlays: number;
   totalCombinedPlays?: number;
+  myTotalWins?: number;
+  partnerTotalWins?: number;
+  totalTies?: number;
+  userWins?: Record<string, number>;
   currentStreak: number;
   highestStreak: number;
   unlockedGamesCount: number;

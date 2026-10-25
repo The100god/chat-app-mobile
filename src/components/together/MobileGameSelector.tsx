@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Image,
   Animated,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useSystemConfig } from '../../context/ConfigContext';
@@ -23,6 +25,8 @@ import {
   Flame,
   Zap,
   Check,
+  X,
+  Search,
 } from 'lucide-react-native';
 import { showToast } from '../Toast';
 
@@ -136,12 +140,14 @@ export const GAMES_REGISTRY: TogetherGameDefinition[] = [
 
 interface MobileGameSelectorProps {
   selectedGameId?: TogetherGameId | null;
-  onSelectGame: (gameId: TogetherGameId) => void;
+  onSelectGame: (gameId: TogetherGameId | null) => void;
   userStats?: Record<string, GameStats>;
   currentUserId?: string;
   partnerId?: string | null;
   partnerName?: string;
   gamificationState?: PairGamificationState | null;
+  friends?: Array<{ friendId: string; username: string; name?: string; profilePic?: string }>;
+  onSelectPartner?: (partnerId: string) => void;
 }
 
 export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
@@ -152,67 +158,98 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
   partnerId,
   partnerName,
   gamificationState,
+  friends = [],
+  onSelectPartner,
 }) => {
   const { theme, mode } = useTheme();
   const { isGameEnabled } = useSystemConfig();
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [showStatsDashboard, setShowStatsDashboard] = useState<boolean>(false);
+  const [partnerSearch, setPartnerSearch] = useState<string>('');
+
+  // Sort partners: currently selected partner first, then alphabetically
+  const sortedFriends = useMemo(() => {
+    return [...friends].sort((a, b) => {
+      if (a.friendId === partnerId) return -1;
+      if (b.friendId === partnerId) return 1;
+      return (a.username || '').localeCompare(b.username || '');
+    });
+  }, [friends, partnerId]);
+
+  const filteredPartners = useMemo(() => {
+    if (!partnerSearch.trim()) return sortedFriends;
+    const q = partnerSearch.toLowerCase().trim();
+    return sortedFriends.filter(
+      (f) =>
+        f.username?.toLowerCase().includes(q) ||
+        (f.name && f.name.toLowerCase().includes(q))
+    );
+  }, [sortedFriends, partnerSearch]);
 
   const filteredGames = GAMES_REGISTRY.filter(
     (g) => (filterCategory === 'all' || g.category === filterCategory) && isGameEnabled(g.id)
   );
 
-  const getStatsForGame = (gameId: string): GameStats => {
-    if (currentUserId && userStats[`${gameId}_${currentUserId}`]) {
-      const s = userStats[`${gameId}_${currentUserId}`];
-      if (s.total > 0 || s.wins > 0) return s;
-    }
-    if (userStats[gameId]) {
-      const s = userStats[gameId];
-      if (s.total > 0 || s.wins > 0) return s;
-    }
-    if (gamificationState?.games) {
-      const gProg = gamificationState.games.find((g) => g.gameId === gameId);
-      if (gProg && (gProg.combinedPlays > 0 || gProg.combinedWins > 0)) {
-        const wins = gProg.combinedWins || 0;
-        const total = gProg.combinedPlays || 0;
-        const losses = Math.max(0, total - wins);
-        return { wins, losses, ties: 0, total };
+  const isLiveRoomMode = Boolean(userStats && Object.keys(userStats).length > 0);
+  const isPairMode = !isLiveRoomMode && Boolean(gamificationState);
+
+  const getStatsForGame = (gameId: string): GameStats & { pointsTogether: number; level: number } => {
+    if (isLiveRoomMode) {
+      if (currentUserId && userStats?.[`${gameId}_${currentUserId}`]) {
+        return { ...userStats[`${gameId}_${currentUserId}`], pointsTogether: 0, level: 1 };
       }
+      if (userStats?.[gameId]) {
+        return { ...userStats[gameId], pointsTogether: 0, level: 1 };
+      }
+      return { wins: 0, losses: 0, ties: 0, total: 0, pointsTogether: 0, level: 1 };
     }
-    return { wins: 0, losses: 0, ties: 0, total: 0 };
+
+    // Pair Mode (No Room Created)
+    const prog = gamificationState?.games?.find((g) => g.gameId === gameId);
+    if (prog) {
+      const pair = prog.pairStats;
+      const myWins = pair ? pair.myWins : (prog.userWins?.[currentUserId || ''] || 0);
+      const partnerWins = pair ? pair.partnerWins : 0;
+      const ties = pair ? pair.ties : (prog.ties || 0);
+      const total = pair ? pair.totalPlays : (prog.combinedPlays || (myWins + partnerWins + ties));
+      return {
+        wins: myWins,
+        losses: partnerWins,
+        ties: ties,
+        total: total,
+        pointsTogether: prog.combinedPoints || 0,
+        level: prog.currentLevel || 1,
+      };
+    }
+
+    return { wins: 0, losses: 0, ties: 0, total: 0, pointsTogether: 0, level: 1 };
   };
 
-  const computedTotalStats = currentUserId && userStats[currentUserId] && userStats[currentUserId].total > 0
-    ? userStats[currentUserId]
-    : GAMES_REGISTRY.reduce(
-        (acc, g) => {
-          const st = getStatsForGame(g.id);
-          return {
-            wins: acc.wins + st.wins,
-            losses: acc.losses + st.losses,
-            ties: acc.ties + st.ties,
-            total: acc.total + st.total,
-          };
-        },
-        { wins: 0, losses: 0, ties: 0, total: 0 }
-      );
+  const computedTotalStats: GameStats & { pointsTogether: number } = isLiveRoomMode
+    ? (currentUserId && userStats?.[currentUserId]
+        ? { ...userStats[currentUserId], pointsTogether: 0 }
+        : GAMES_REGISTRY.reduce(
+            (acc, g) => {
+              const st = getStatsForGame(g.id);
+              return {
+                wins: acc.wins + st.wins,
+                losses: acc.losses + st.losses,
+                ties: acc.ties + st.ties,
+                total: acc.total + st.total,
+                pointsTogether: 0,
+              };
+            },
+            { wins: 0, losses: 0, ties: 0, total: 0, pointsTogether: 0 }
+          ))
+    : {
+        wins: gamificationState?.summary?.myTotalWins ?? gamificationState?.summary?.totalCombinedWins ?? 0,
+        losses: gamificationState?.summary?.partnerTotalWins ?? 0,
+        ties: gamificationState?.summary?.totalTies ?? 0,
+        total: gamificationState?.summary?.totalCombinedPlays ?? 0,
+        pointsTogether: gamificationState?.summary?.totalCombinedPoints ?? 0,
+      };
 
-  const totalStats: GameStats =
-    computedTotalStats.total > 0
-      ? computedTotalStats
-      : gamificationState?.summary
-      ? {
-          wins: gamificationState.summary.totalCombinedWins ?? gamificationState.summary.totalWins ?? 0,
-          total: gamificationState.summary.totalCombinedPlays ?? gamificationState.summary.totalPlays ?? 0,
-          losses: Math.max(
-            0,
-            (gamificationState.summary.totalCombinedPlays ?? gamificationState.summary.totalPlays ?? 0) -
-              (gamificationState.summary.totalCombinedWins ?? gamificationState.summary.totalWins ?? 0)
-          ),
-          ties: 0,
-        }
-      : computedTotalStats;
+  const totalStats = computedTotalStats;
 
   const winRate =
     totalStats.total > 0 ? Math.round((totalStats.wins / totalStats.total) * 100) : 0;
@@ -265,8 +302,8 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
         </ScrollView>
       </View>
 
-      {/* Pair Progression Box - Matching UI spec & Theme-aware */}
-      {gamificationState && (
+      {/* Pair Progression Box - Matching UI spec & Theme-aware (Shown only when in active game room) */}
+      {isLiveRoomMode && gamificationState && (
         <View
           style={[
             styles.pairProgressionCard,
@@ -373,104 +410,250 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
         </View>
       )}
 
-      {/* Stats Dashboard */}
-      {showStatsDashboard && (
-        <View
-          style={[
-            styles.statsDashboardCard,
-            { backgroundColor: theme.card, borderColor: `${theme.accent}60` },
-          ]}
-        >
-          <View style={[styles.statsHeader, { borderBottomColor: theme.border }]}>
-            <View style={styles.statsHeaderLeft}>
-              <Text style={styles.trophyEmoji}>🏆</Text>
-              <View>
-                <Text style={[styles.statsTitle, { color: theme.foreground }]}>
-                  Session Stats Overview
-                </Text>
-                <Text style={[styles.statsSubtitle, { color: theme.mutedText }]}>
-                  Real-time multiplayer metrics
-                </Text>
-              </View>
-            </View>
-            <View style={styles.winRateBox}>
-              <Text style={styles.winRateValue}>{winRate}%</Text>
-              <Text style={styles.winRateLabel}>WIN RATE</Text>
-            </View>
-          </View>
-
-          {/* Aggregate Stats Cards */}
-          <View style={styles.statsMetricsRow}>
-            <View style={[styles.metricCard, styles.winMetricCard]}>
-              <View style={styles.metricTitleRow}>
-                <Trophy size={11} color="#22c55e" />
-                <Text style={[styles.metricLabel, { color: '#22c55e' }]}>Wins</Text>
-              </View>
-              <Text style={[styles.metricValue, { color: '#4ade80' }]}>{totalStats.wins}</Text>
-            </View>
-
-            <View style={[styles.metricCard, styles.lossMetricCard]}>
-              <View style={styles.metricTitleRow}>
-                <XCircle size={11} color="#ef4444" />
-                <Text style={[styles.metricLabel, { color: '#ef4444' }]}>Losses</Text>
-              </View>
-              <Text style={[styles.metricValue, { color: '#fca5a5' }]}>{totalStats.losses}</Text>
-            </View>
-
-            <View style={[styles.metricCard, styles.tieMetricCard]}>
-              <View style={styles.metricTitleRow}>
-                <Handshake size={11} color="#eab308" />
-                <Text style={[styles.metricLabel, { color: '#eab308' }]}>Ties</Text>
-              </View>
-              <Text style={[styles.metricValue, { color: '#fde047' }]}>{totalStats.ties}</Text>
-            </View>
-
-            <View style={[styles.metricCard, styles.totalMetricCard]}>
-              <View style={styles.metricTitleRow}>
-                <Gamepad2 size={11} color="#a855f7" />
-                <Text style={[styles.metricLabel, { color: '#a855f7' }]}>Played</Text>
-              </View>
-              <Text style={[styles.metricValue, { color: '#c084fc' }]}>{totalStats.total}</Text>
-            </View>
-          </View>
-
-          {/* Per Game Stats Breakdown */}
-          <View style={styles.perGameList}>
-            {GAMES_REGISTRY.map((game) => {
-              const st = getStatsForGame(game.id);
-              return (
-                <View
-                  key={game.id}
-                  style={[
-                    styles.perGameRow,
-                    { backgroundColor: theme.muted, borderColor: theme.border },
-                  ]}
-                >
-                  <Image source={game.iconAsset} style={styles.perGameIcon} />
-                  <View style={styles.perGameInfo}>
-                    <Text style={[styles.perGameTitle, { color: theme.foreground }]}>
-                      {game.title}
-                    </Text>
-                    <Text style={styles.perGameStatsText}>
-                      <Text style={{ color: '#22c55e', fontWeight: '700' }}>{st.wins}W </Text>
-                      <Text style={{ color: '#ef4444', fontWeight: '700' }}>{st.losses}L </Text>
-                      <Text style={{ color: '#eab308', fontWeight: '700' }}>{st.ties}T</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.perGameTotalBadge}>
-                    <Text style={[styles.perGameTotalNum, { color: theme.foreground }]}>
-                      {st.total}
-                    </Text>
-                    <Text style={[styles.perGameTotalLabel, { color: theme.mutedText }]}>
-                      {st.total === 1 ? 'game' : 'games'}
-                    </Text>
-                  </View>
+      {/* Stats Dashboard Modal */}
+      <Modal
+        visible={showStatsDashboard}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowStatsDashboard(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.statsModalContent,
+              { backgroundColor: theme.card, borderColor: `${theme.accent}60` },
+            ]}
+          >
+            <View style={[styles.statsHeader, { borderBottomColor: theme.border }]}>
+              <View style={styles.statsHeaderLeft}>
+                <Text style={styles.trophyEmoji}>{isPairMode ? '⚡' : '🏆'}</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.statsTitle, { color: theme.foreground }]} numberOfLines={1}>
+                    {isPairMode ? `Pair: You ⇄ ${partnerName || 'Partner'}` : 'Session Stats Overview'}
+                  </Text>
+                  <Text style={[styles.statsSubtitle, { color: theme.mutedText }]} numberOfLines={1}>
+                    {isPairMode ? 'Lifetime matches & points together' : 'Real-time multiplayer metrics'}
+                  </Text>
                 </View>
-              );
-            })}
+              </View>
+              <View style={styles.statsHeaderRight}>
+                <View style={styles.winRateBox}>
+                  <Text style={styles.winRateValue}>{winRate}%</Text>
+                  <Text style={styles.winRateLabel}>WIN RATE</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.modalCloseBtn, { backgroundColor: theme.muted }]}
+                  onPress={() => setShowStatsDashboard(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <X size={16} color={theme.foreground} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Partner Switcher (When in Pair Mode with multiple friends) */}
+            {isPairMode && friends.length > 1 && onSelectPartner && (
+              <View style={styles.partnerSwitcherSection}>
+                <View style={styles.partnerSwitcherHeader}>
+                  <Text style={[styles.partnerSwitcherLabel, { color: theme.mutedText }]}>
+                    With Partner ({filteredPartners.length}):
+                  </Text>
+                  {friends.length > 6 && (
+                    <View style={[styles.partnerSearchBox, { backgroundColor: theme.muted, borderColor: theme.border }]}>
+                      <Search size={11} color={theme.mutedText} />
+                      <TextInput
+                        value={partnerSearch}
+                        onChangeText={setPartnerSearch}
+                        placeholder="Search friend..."
+                        placeholderTextColor={theme.mutedText}
+                        style={[styles.partnerSearchInput, { color: theme.foreground }]}
+                      />
+                      {partnerSearch.length > 0 && (
+                        <TouchableOpacity onPress={() => setPartnerSearch('')}>
+                          <X size={11} color={theme.mutedText} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 2 }}>
+                  {filteredPartners.map((f) => {
+                    const isSelected = f.friendId === partnerId;
+                    return (
+                      <TouchableOpacity
+                        key={f.friendId}
+                        onPress={() => onSelectPartner(f.friendId)}
+                        style={[
+                          styles.partnerChip,
+                          {
+                            borderColor: theme.border,
+                            backgroundColor: theme.muted,
+                          },
+                          isSelected && {
+                            backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                            borderColor: '#f59e0b',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.partnerChipText,
+                            { color: theme.mutedText },
+                            isSelected && { color: '#f59e0b', fontWeight: '800' },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {isSelected ? '⚡ ' : ''}{f.username}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Aggregate Stats Cards */}
+            <View style={styles.statsMetricsRow}>
+              {isPairMode ? (
+                <>
+                  <View style={[styles.metricCard, styles.tieMetricCard]}>
+                    <View style={styles.metricTitleRow}>
+                      <Zap size={11} color="#f59e0b" />
+                      <Text style={[styles.metricLabel, { color: '#f59e0b' }]}>Points</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#fbbf24', fontSize: 14 }]}>
+                      {totalStats.pointsTogether}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.metricCard, styles.winMetricCard]}>
+                    <View style={styles.metricTitleRow}>
+                      <Trophy size={11} color="#22c55e" />
+                      <Text style={[styles.metricLabel, { color: '#22c55e' }]}>You (W)</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#4ade80', fontSize: 14 }]}>
+                      {totalStats.wins}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.metricCard, styles.lossMetricCard]}>
+                    <View style={styles.metricTitleRow}>
+                      <XCircle size={11} color="#ef4444" />
+                      <Text style={[styles.metricLabel, { color: '#ef4444' }]}>Partner</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#fca5a5', fontSize: 14 }]}>
+                      {totalStats.losses}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.metricCard, styles.totalMetricCard]}>
+                    <View style={styles.metricTitleRow}>
+                      <Handshake size={11} color="#a855f7" />
+                      <Text style={[styles.metricLabel, { color: '#a855f7' }]}>Ties</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#c084fc', fontSize: 14 }]}>
+                      {totalStats.ties}
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.metricCard, styles.winMetricCard]}>
+                    <View style={styles.metricTitleRow}>
+                      <Trophy size={11} color="#22c55e" />
+                      <Text style={[styles.metricLabel, { color: '#22c55e' }]}>Wins</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#4ade80' }]}>{totalStats.wins}</Text>
+                  </View>
+
+                  <View style={[styles.metricCard, styles.lossMetricCard]}>
+                    <View style={styles.metricTitleRow}>
+                      <XCircle size={11} color="#ef4444" />
+                      <Text style={[styles.metricLabel, { color: '#ef4444' }]}>Losses</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#fca5a5' }]}>{totalStats.losses}</Text>
+                  </View>
+
+                  <View style={[styles.metricCard, styles.tieMetricCard]}>
+                    <View style={styles.metricTitleRow}>
+                      <Handshake size={11} color="#eab308" />
+                      <Text style={[styles.metricLabel, { color: '#eab308' }]}>Ties</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#fde047' }]}>{totalStats.ties}</Text>
+                  </View>
+
+                  <View style={[styles.metricCard, styles.totalMetricCard]}>
+                    <View style={styles.metricTitleRow}>
+                      <Gamepad2 size={11} color="#a855f7" />
+                      <Text style={[styles.metricLabel, { color: '#a855f7' }]}>Played</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#c084fc' }]}>{totalStats.total}</Text>
+                  </View>
+                </>
+              )}
+            </View>
+
+            {/* Per Game Stats Breakdown */}
+            <ScrollView
+              style={styles.modalScrollList}
+              contentContainerStyle={styles.perGameList}
+              showsVerticalScrollIndicator={false}
+            >
+              {GAMES_REGISTRY.map((game) => {
+                const st = getStatsForGame(game.id);
+                return (
+                  <View
+                    key={game.id}
+                    style={[
+                      styles.perGameRow,
+                      { backgroundColor: theme.muted, borderColor: theme.border },
+                    ]}
+                  >
+                    <Image source={game.iconAsset} style={styles.perGameIcon} />
+                    <View style={styles.perGameInfo}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.perGameTitle, { color: theme.foreground }]} numberOfLines={1}>
+                          {game.title}
+                        </Text>
+                        {st.level ? (
+                          <View style={{ paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: 'rgba(245, 158, 11, 0.15)' }}>
+                            <Text style={{ fontSize: 9, fontWeight: '800', color: '#f59e0b' }}>Lvl {st.level}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.perGameStatsText}>
+                        <Text style={{ color: '#22c55e', fontWeight: '700' }}>{st.wins}W </Text>
+                        <Text style={{ color: '#ef4444', fontWeight: '700' }}>{st.losses}L </Text>
+                        <Text style={{ color: '#eab308', fontWeight: '700' }}>{st.ties}T </Text>
+                        {isPairMode && st.pointsTogether > 0 ? (
+                          <Text style={{ color: '#f59e0b', fontWeight: '800' }}>• ⚡{st.pointsTogether} pts</Text>
+                        ) : null}
+                      </Text>
+                    </View>
+                    <View style={styles.perGameTotalBadge}>
+                      <Text style={[styles.perGameTotalNum, { color: theme.foreground }]}>
+                        {st.total}
+                      </Text>
+                      <Text style={[styles.perGameTotalLabel, { color: theme.mutedText }]}>
+                        {st.total === 1 ? 'game' : 'games'}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.modalBottomCloseBtn, { backgroundColor: theme.accent }]}
+              onPress={() => setShowStatsDashboard(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalBottomCloseBtnText}>Close Stats</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
 
       {/* Section Header Row with Stats Toggle Button */}
       <View style={styles.sectionHeaderRow}>
@@ -594,28 +777,32 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
                 </View>
               )}
 
-              {/* Stats Bar */}
-              <View
-                style={[
-                  styles.cardStatsBar,
-                  { backgroundColor: theme.muted, borderColor: theme.border },
-                ]}
-              >
-                <View style={styles.statsRowLeft}>
-                  <Text style={[styles.statText, { color: '#22c55e' }]}>
-                    🏆 {stats.wins} W
-                  </Text>
-                  <Text style={[styles.statText, { color: '#ef4444' }]}>
-                    ❌ {stats.losses} L
-                  </Text>
-                  <Text style={[styles.statText, { color: '#eab308' }]}>
-                    🤝 {stats.ties} T
+              {/* Stats Bar (Show only when inside an active game room) */}
+              {isLiveRoomMode && (
+                <View
+                  style={[
+                    styles.cardStatsBar,
+                    { backgroundColor: theme.muted, borderColor: theme.border },
+                  ]}
+                >
+                  <View style={styles.statsRowLeft}>
+                    <Text style={[styles.statText, { color: '#22c55e' }]}>
+                      🏆 {stats.wins} W
+                    </Text>
+                    <Text style={[styles.statText, { color: '#ef4444' }]}>
+                      ❌ {stats.losses} L
+                    </Text>
+                    <Text style={[styles.statText, { color: '#eab308' }]}>
+                      🤝 {stats.ties} T
+                    </Text>
+                  </View>
+                  <Text style={[styles.statTotalText, { color: theme.mutedText }]}>
+                    {isPairMode && stats.pointsTogether > 0
+                      ? `⚡ ${stats.pointsTogether} pts`
+                      : `${stats.total} Total`}
                   </Text>
                 </View>
-                <Text style={[styles.statTotalText, { color: theme.mutedText }]}>
-                  {stats.total} Total
-                </Text>
-              </View>
+              )}
 
               {/* Action Button */}
               <TouchableOpacity
@@ -625,19 +812,11 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
                     ? styles.lockedButton
                     : {
                         backgroundColor: isSelected
-                          ? theme.accent
-                          : mode === 'dark'
-                          ? 'rgba(139, 92, 246, 0.22)'
-                          : mode === 'aurora'
-                          ? 'rgba(0, 188, 212, 0.22)'
-                          : 'rgba(0, 168, 132, 0.12)',
+                          ? '#ef4444'
+                          : theme.accent,
                         borderColor: isSelected
-                          ? theme.accent
-                          : mode === 'dark'
-                          ? 'rgba(139, 92, 246, 0.55)'
-                          : mode === 'aurora'
-                          ? 'rgba(0, 188, 212, 0.55)'
-                          : 'rgba(0, 168, 132, 0.4)',
+                          ? '#dc2626'
+                          : theme.accent,
                       },
                 ]}
                 onPress={() => {
@@ -648,50 +827,33 @@ export const MobileGameSelector: React.FC<MobileGameSelectorProps> = ({
                     );
                     return;
                   }
-                  onSelectGame(game.id);
+                  if (isSelected) {
+                    onSelectGame(null);
+                  } else {
+                    onSelectGame(game.id);
+                  }
                 }}
-                activeOpacity={0.75}
+                activeOpacity={0.8}
               >
                 {isUnlocked ? (
                   <>
                     {isSelected ? (
-                      <Check size={15} color="#ffffff" strokeWidth={3} style={{ marginRight: 6 }} />
+                      <X size={15} color="#ffffff" strokeWidth={3} style={{ marginRight: 6 }} />
                     ) : (
                       <Play
                         size={14}
-                        color={
-                          mode === 'dark'
-                            ? '#c4b5fd'
-                            : mode === 'aurora'
-                            ? '#22d3ee'
-                            : theme.accent
-                        }
-                        fill={
-                          mode === 'dark'
-                            ? '#c4b5fd'
-                            : mode === 'aurora'
-                            ? '#22d3ee'
-                            : theme.accent
-                        }
+                        color="#ffffff"
+                        fill="#ffffff"
                         style={{ marginRight: 6 }}
                       />
                     )}
                     <Text
                       style={[
                         styles.playButtonText,
-                        {
-                          color: isSelected
-                            ? '#ffffff'
-                            : mode === 'dark'
-                            ? '#ffffff'
-                            : mode === 'aurora'
-                            ? '#e0f7fa'
-                            : theme.foreground,
-                        },
-                        isSelected && { fontWeight: '800' },
+                        { color: '#ffffff', fontWeight: '800' },
                       ]}
                     >
-                      {isSelected ? 'Selected Game' : 'Play'}
+                      {isSelected ? 'Cancel Selection' : 'Play Now'}
                     </Text>
                   </>
                 ) : (
@@ -752,6 +914,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  statsModalContent: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '85%',
+    borderRadius: 24,
+    padding: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+  },
   statsDashboardCard: {
     borderRadius: 20,
     padding: 16,
@@ -763,36 +946,109 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 12,
     borderBottomWidth: 1,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   statsHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   trophyEmoji: {
-    fontSize: 24,
+    fontSize: 22,
+    flexShrink: 0,
   },
   statsTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
   statsSubtitle: {
-    fontSize: 11,
+    fontSize: 10,
+  },
+  statsHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
   },
   winRateBox: {
     alignItems: 'flex-end',
+    minWidth: 44,
   },
   winRateValue: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '900',
     color: '#22c55e',
+    fontVariant: ['tabular-nums'],
   },
   winRateLabel: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
     color: '#64748b',
+  },
+  partnerSwitcherSection: {
+    marginBottom: 12,
+  },
+  partnerSwitcherHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    gap: 8,
+  },
+  partnerSwitcherLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  partnerSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    maxWidth: 150,
+  },
+  partnerSearchInput: {
+    fontSize: 11,
+    padding: 0,
+    minWidth: 70,
+  },
+  partnerChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  partnerChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  modalCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalScrollList: {
+    maxHeight: 280,
+    marginBottom: 12,
+  },
+  modalBottomCloseBtn: {
+    paddingVertical: 10,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBottomCloseBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
   },
   statsMetricsRow: {
     flexDirection: 'row',
@@ -912,20 +1168,23 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   gameIconBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 6,
+    flexShrink: 0,
   },
   gameIconImage: {
-    width: 34,
-    height: 34,
+    width: 30,
+    height: 30,
     resizeMode: 'contain',
+    flexShrink: 0,
   },
   gameTitleBox: {
     flex: 1,
+    minWidth: 0,
   },
   titleRow: {
     flexDirection: 'row',
@@ -934,11 +1193,13 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     flex: 1,
-    paddingRight: 8,
+    minWidth: 0,
+    paddingRight: 6,
   },
   badgeColumn: {
     alignItems: 'flex-end',
     gap: 4,
+    flexShrink: 0,
   },
   gameTitle: {
     fontSize: 16,

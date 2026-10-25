@@ -79,7 +79,7 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
 
   const partnerId = room?.participants?.find((p) => p !== userId);
   const { gamificationState, lastResult, showResultModal, dismissResultModal } = useGamification(partnerId);
-  const { timeLeft, isLowTime } = useRoundTimer(room);
+  const { timeLeft, isLowTime, isRoundOff } = useRoundTimer(room);
 
   if (!room) return null;
 
@@ -175,64 +175,86 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
     >
       {/* Compact Room Header */}
       <View style={[styles.headerBanner, { backgroundColor: config.color }]}>
-        <View style={styles.headerLeft}>
-          {gameDef ? (
-            <Image source={gameDef.iconAsset} style={styles.headerGameIcon} />
-          ) : (
-            <Text style={{ fontSize: 20 }}>{config.emoji}</Text>
-          )}
-          <Text style={styles.headerTitleText} numberOfLines={1}>
-            {gameDef ? gameDef.title : config.label}
-          </Text>
+        {/* Row 1: Identity & Room Meta */}
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerIdentity}>
+            {gameDef ? (
+              <Image source={gameDef.iconAsset} style={styles.headerGameIcon} />
+            ) : (
+              <Text style={{ fontSize: 20 }}>{config.emoji}</Text>
+            )}
+            <Text style={styles.headerTitleText} numberOfLines={1} ellipsizeMode="tail">
+              {gameDef ? gameDef.title : config.label}
+            </Text>
 
-          {room.type === 'game' && (
-            <View style={styles.headerBadgesRow}>
+            {room.type === 'game' && (
               <View style={styles.lvlBadge}>
                 <Text style={styles.lvlBadgeText}>
                   Lvl {Number((room.state as any)?.currentLevel || 1)}
                 </Text>
               </View>
+            )}
+          </View>
+
+          <View style={styles.headerActions}>
+            {totalUnread > 0 && (
+              <TouchableOpacity
+                style={styles.unreadChatBtn}
+                onPress={() => router.push('/(app)/(tabs)')}
+                activeOpacity={0.8}
+              >
+                <MessageSquare size={12} color="#ffffff" />
+                <Text style={styles.unreadChatText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.headerBtn} onPress={handleCopyRoomId} activeOpacity={0.75}>
+              <Text style={styles.roomIdMono}>#{room.roomId.slice(-6)}</Text>
+              {copied ? <Check size={12} color="#ffffff" /> : <Copy size={12} color="#ffffff" />}
+            </TouchableOpacity>
+
+            <View style={styles.usersPill}>
+              <Users size={12} color="#ffffff" />
+              <Text style={styles.usersCountText}>{room.participants.length}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Row 2: Game Status & Controls (Only for game rooms) */}
+        {room.type === 'game' && (
+          <View style={styles.headerSubRow}>
+            {/* Left: Round Status / Timer */}
+            {room.participants.length < 2 ? (
+              <View style={styles.statusPill}>
+                <Clock size={11} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.statusPillText}>Waiting for partner...</Text>
+              </View>
+            ) : isRoundOff ? (
+              <View style={styles.roundOffPill}>
+                <Text style={styles.roundOffText}>🏁 Round Ended</Text>
+              </View>
+            ) : (
               <View style={[styles.roundTimerChip, isLowTime && styles.roundTimerChipLow]}>
                 <Clock size={11} color={isLowTime ? '#ffffff' : '#fbbf24'} />
                 <Text style={[styles.roundTimerText, isLowTime && styles.roundTimerTextLow]}>
                   {timeLeft}s
                 </Text>
               </View>
-            </View>
-          )}
-        </View>
+            )}
 
-        <View style={styles.headerRight}>
-          {totalUnread > 0 && (
+            {/* Right: Switch Game */}
             <TouchableOpacity
-              style={styles.unreadChatBtn}
-              onPress={() => router.push('/(app)/(tabs)')}
-              activeOpacity={0.8}
-            >
-              <MessageSquare size={12} color="#ffffff" />
-              <Text style={styles.unreadChatText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
-            </TouchableOpacity>
-          )}
-
-          {room.type === 'game' && (
-            <TouchableOpacity
-              style={styles.headerBtn}
+              style={styles.switchGameBtn}
               onPress={() => setIsChangingGame(!isChangingGame)}
+              activeOpacity={0.75}
             >
-              <ArrowRightLeft size={13} color="#ffffff" />
+              <ArrowRightLeft size={12} color="#ffffff" />
+              <Text style={styles.switchGameBtnText}>
+                {isChangingGame ? 'Resume' : 'Switch Game'}
+              </Text>
             </TouchableOpacity>
-          )}
-
-          <TouchableOpacity style={styles.headerBtn} onPress={handleCopyRoomId}>
-            <Text style={styles.roomIdMono}>#{room.roomId.slice(-6)}</Text>
-            {copied ? <Check size={12} color="#ffffff" /> : <Copy size={12} color="#ffffff" />}
-          </TouchableOpacity>
-
-          <View style={styles.usersPill}>
-            <Users size={12} color="#ffffff" />
-            <Text style={styles.usersCountText}>{room.participants.length}</Text>
           </View>
-        </View>
+        )}
       </View>
 
       {/* Waiting for Partner Invitation Overlay */}
@@ -283,6 +305,7 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
                     partnerName={partnerName}
                     gamificationState={gamificationState}
                     onSelectGame={(newGameId) => {
+                      if (!newGameId) return;
                       switchGame(newGameId);
                       setIsChangingGame(false);
                     }}
@@ -506,31 +529,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
+    flexDirection: 'column',
+    gap: 8,
+    elevation: 3,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    elevation: 3,
+    width: '100%',
   },
-  headerLeft: {
+  headerIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   headerGameIcon: {
     width: 26,
     height: 26,
     resizeMode: 'contain',
+    flexShrink: 0,
   },
   headerTitleText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
-  },
-  headerBadgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    flexShrink: 1,
   },
   lvlBadge: {
     backgroundColor: 'rgba(0, 0, 0, 0.25)',
@@ -539,20 +566,65 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: 'rgba(251, 191, 36, 0.35)',
+    flexShrink: 0,
   },
   lvlBadgeText: {
     color: '#fbbf24',
     fontSize: 9,
     fontWeight: '800',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  headerSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusPillText: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  roundOffPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  roundOffText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
   roundTimerChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(251, 191, 36, 0.4)',
   },
@@ -569,10 +641,19 @@ const styles = StyleSheet.create({
   roundTimerTextLow: {
     color: '#ffffff',
   },
-  headerRight: {
+  switchGameBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  switchGameBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
   },
   headerBtn: {
     flexDirection: 'row',

@@ -102,9 +102,7 @@ export const MobileQuizBoard: React.FC<MobileQuizBoardProps> = ({
   const hasAnsweredCurrent = mySelectedOption !== undefined;
 
   const sessionStats: GameStats =
-    (currentUserId &&
-      (room.sessionStats?.[`quiz_${currentUserId}`] ||
-        room.sessionStats?.[currentUserId])) || {
+    (currentUserId && room.sessionStats?.[`quiz_${currentUserId}`]) || {
       wins: 0,
       losses: 0,
       ties: 0,
@@ -213,9 +211,11 @@ export const MobileQuizBoard: React.FC<MobileQuizBoardProps> = ({
               source={require('../../../../assets/game-icons/quiz.png')}
               style={styles.gameIcon}
             />
-            <View>
-              <Text style={[styles.gameTitle, { color: theme.foreground }]}>Trivia Quiz Duel</Text>
-              <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.gameTitle, { color: theme.foreground }]} numberOfLines={1}>
+                Trivia Quiz Duel
+              </Text>
+              <Text style={[styles.gameSubtitle, { color: theme.mutedText }]} numberOfLines={1}>
                 Question {Math.min(currentQuestionIndex + 1, questions.length || 5)} of{' '}
                 {questions.length || 5}
               </Text>
@@ -565,11 +565,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   gameIcon: {
     width: 32,
     height: 32,
     resizeMode: 'contain',
+    flexShrink: 0,
   },
   gameTitle: {
     fontSize: 13,

@@ -74,9 +74,7 @@ export const MobileTicTacToeBoard: React.FC<MobileTicTacToeBoardProps> = ({
   const isMyTurn = status === 'playing' && playerSymbol && currentTurn === playerSymbol;
 
   const sessionStats: GameStats =
-    (currentUserId &&
-      (room.sessionStats?.[`tictactoe_${currentUserId}`] ||
-        room.sessionStats?.[currentUserId])) || {
+    (currentUserId && room.sessionStats?.[`tictactoe_${currentUserId}`]) || {
       wins: 0,
       losses: 0,
       ties: 0,
@@ -120,8 +118,10 @@ export const MobileTicTacToeBoard: React.FC<MobileTicTacToeBoardProps> = ({
               source={require('../../../../assets/game-icons/tictactoe.png')}
               style={styles.gameIcon}
             />
-            <View>
-              <Text style={[styles.gameTitle, { color: theme.foreground }]}>Tic-Tac-Toe</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.gameTitle, { color: theme.foreground }]} numberOfLines={1}>
+                Tic-Tac-Toe
+              </Text>
               <View style={styles.subtitleRow}>
                 <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>
                   {status === 'playing'
@@ -447,11 +447,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   gameIcon: {
     width: 32,
     height: 32,
     resizeMode: 'contain',
+    flexShrink: 0,
   },
   gameTitle: {
     fontSize: 13,

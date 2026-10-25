@@ -130,6 +130,11 @@ export default function TogetherTab() {
     setIsCreateModalOpen(true);
   };
 
+  const handleCloseCreateModal = () => {
+    setIsCreateModalOpen(false);
+    setSelectedGameId(undefined);
+  };
+
   const handleConfirmCreate = (inviteFriend: boolean) => {
     const targetUserId = inviteFriend && selectedFriendId ? selectedFriendId : undefined;
     const gameOrActId =
@@ -141,6 +146,7 @@ export default function TogetherTab() {
 
     createRoom(pendingType, gameOrActId, targetUserId);
     setIsCreateModalOpen(false);
+    setSelectedGameId(undefined);
   };
 
   const handleManualJoin = () => {
@@ -383,12 +389,21 @@ export default function TogetherTab() {
         {/* SECTION 2: GAMES */}
         {activeSection === 'games' && (
           <MobileGameSelector
+            selectedGameId={selectedGameId}
             currentUserId={currentUserId || undefined}
             userStats={activeRoom?.sessionStats || {}}
             partnerId={partnerId}
             partnerName={partnerName}
             gamificationState={gamificationState}
-            onSelectGame={(gameId) => handleOpenCreateModal('game', gameId)}
+            friends={selectableFriends}
+            onSelectPartner={(pId) => setSelectedFriendId(pId)}
+            onSelectGame={(gameId) => {
+              if (!gameId || gameId === selectedGameId) {
+                setSelectedGameId(undefined);
+                return;
+              }
+              handleOpenCreateModal('game', gameId);
+            }}
           />
         )}
 
@@ -476,7 +491,7 @@ export default function TogetherTab() {
               </View>
               <TouchableOpacity
                 style={[styles.closeCircleBtn, { backgroundColor: theme.muted }]}
-                onPress={() => setIsCreateModalOpen(false)}
+                onPress={handleCloseCreateModal}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <X size={18} color={theme.mutedText} />
