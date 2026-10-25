@@ -151,10 +151,20 @@ export const MobileCatchPartnerBoard: React.FC<MobileCatchPartnerBoardProps> = (
               source={require('../../../../assets/game-icons/catchpartner.png')}
               style={styles.gameIcon}
             />
-            <View>
-              <Text style={[styles.gameTitle, { color: theme.foreground }]}>Pakdam Pakdai</Text>
-              <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.gameTitle, { color: theme.foreground }]} numberOfLines={1}>
+                  Pakdam Pakdai
+                </Text>
+                <View style={styles.levelBadge}>
+                  <Text style={styles.levelBadgeText}>Lvl {Number((room.state as any)?.currentLevel || 1)}</Text>
+                </View>
+              </View>
+              <Text style={[styles.gameSubtitle, { color: theme.mutedText }]} numberOfLines={1}>
                 Round {round} of {maxRounds} • {timer}s
+                {(room.state as any)?.levelConfig?.courtyardLayout?.preset
+                  ? ` • ${String((room.state as any).levelConfig.courtyardLayout.preset).replace(/_/g, ' ')}`
+                  : ''}
               </Text>
             </View>
           </View>
@@ -416,11 +426,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   gameIcon: {
     width: 32,
     height: 32,
     resizeMode: 'contain',
+    flexShrink: 0,
   },
   gameTitle: {
     fontSize: 13,
@@ -671,5 +684,18 @@ const styles = StyleSheet.create({
   switchGameBtnText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  levelBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  levelBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#fbbf24',
   },
 });

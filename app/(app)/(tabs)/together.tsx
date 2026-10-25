@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
 import { useTheme } from '../../../src/context/ThemeContext';
+import { useSystemConfig } from '../../../src/context/ConfigContext';
 import {
   togetherRoomAtom,
   togetherInvitesAtom,
@@ -27,6 +28,7 @@ import {
 } from '../../../src/states/togetherTypes';
 import { MobileGameSelector } from '../../../src/components/together/MobileGameSelector';
 import { MobileActivitySelector } from '../../../src/components/together/MobileActivitySelector';
+import { useGamification } from '../../../src/hooks/useGamification';
 import {
   Gamepad2,
   Tv,
@@ -65,6 +67,15 @@ const SECTIONS: SectionInfo[] = [
 export default function TogetherTab() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { isFeatureEnabled } = useSystemConfig();
+  const isTogetherEnabled = isFeatureEnabled('feature_together_hub');
+
+  useEffect(() => {
+    if (!isTogetherEnabled) {
+      router.replace('/(app)/(tabs)');
+    }
+  }, [isTogetherEnabled, router]);
+
   const [activeSection, setActiveSection] = useState<TogetherSection>('home');
 
   const [activeRoom] = useAtom(togetherRoomAtom);
@@ -72,6 +83,10 @@ export default function TogetherTab() {
   const [currentUserId] = useAtom(userIdAtom);
   const [friends] = useAtom<Friend[]>(friendsAtom);
   const { createRoom, joinRoom, declineInvite } = useTogetherRoom();
+
+  if (!isTogetherEnabled) {
+    return null;
+  }
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
@@ -86,6 +101,11 @@ export default function TogetherTab() {
   const selectableFriends = (friends || []).filter(
     (f) => String(f.friendId) !== String(currentUserId) && String((f as any)._id || '') !== String(currentUserId)
   );
+
+  const primaryPartner = selectableFriends.find((f) => f.friendId === selectedFriendId) || selectableFriends[0] || (friends || [])[0];
+  const partnerId = primaryPartner?.friendId;
+  const partnerName = primaryPartner?.username;
+  const { gamificationState } = useGamification(partnerId);
 
   // Auto-navigate to room detail when a new room is created or joined
   const prevRoomIdRef = useRef<string | null>(null);
@@ -110,17 +130,23 @@ export default function TogetherTab() {
     setIsCreateModalOpen(true);
   };
 
+  const handleCloseCreateModal = () => {
+    setIsCreateModalOpen(false);
+    setSelectedGameId(undefined);
+  };
+
   const handleConfirmCreate = (inviteFriend: boolean) => {
     const targetUserId = inviteFriend && selectedFriendId ? selectedFriendId : undefined;
     const gameOrActId =
       pendingType === 'activity'
         ? selectedActivityId || 'would_you_rather'
         : pendingType === 'game'
-        ? selectedGameId
-        : undefined;
+          ? selectedGameId
+          : undefined;
 
     createRoom(pendingType, gameOrActId, targetUserId);
     setIsCreateModalOpen(false);
+    setSelectedGameId(undefined);
   };
 
   const handleManualJoin = () => {
@@ -363,7 +389,21 @@ export default function TogetherTab() {
         {/* SECTION 2: GAMES */}
         {activeSection === 'games' && (
           <MobileGameSelector
-            onSelectGame={(gameId) => handleOpenCreateModal('game', gameId)}
+            selectedGameId={selectedGameId}
+            currentUserId={currentUserId || undefined}
+            userStats={activeRoom?.sessionStats || {}}
+            partnerId={partnerId}
+            partnerName={partnerName}
+            gamificationState={gamificationState}
+            friends={selectableFriends}
+            onSelectPartner={(pId) => setSelectedFriendId(pId)}
+            onSelectGame={(gameId) => {
+              if (!gameId || gameId === selectedGameId) {
+                setSelectedGameId(undefined);
+                return;
+              }
+              handleOpenCreateModal('game', gameId);
+            }}
           />
         )}
 
@@ -383,7 +423,7 @@ export default function TogetherTab() {
                 onPress={() => handleOpenCreateModal('watch')}
               >
                 <Plus size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.startSessionText}>Start Watch Room</Text>
+                <Text style={styles.startSessionText}>Watch</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -413,7 +453,7 @@ export default function TogetherTab() {
                 onPress={() => handleOpenCreateModal('music')}
               >
                 <Plus size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.startSessionText}>Start Listen Room</Text>
+                <Text style={styles.startSessionText}> Listen</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -451,7 +491,7 @@ export default function TogetherTab() {
               </View>
               <TouchableOpacity
                 style={[styles.closeCircleBtn, { backgroundColor: theme.muted }]}
-                onPress={() => setIsCreateModalOpen(false)}
+                onPress={handleCloseCreateModal}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <X size={18} color={theme.mutedText} />

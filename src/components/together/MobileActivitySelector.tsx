@@ -7,6 +7,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useSystemConfig } from '../../context/ConfigContext';
 import { TogetherActivityId } from '../../states/togetherTypes';
 import {
   Heart,
@@ -80,9 +81,11 @@ export const MobileActivitySelector: React.FC<MobileActivitySelectorProps> = ({
   onSelectActivity,
 }) => {
   const { theme } = useTheme();
+  const { isActivityEnabled } = useSystemConfig();
   const [filter, setFilter] = useState<string>('all');
 
   const filteredActivities = ACTIVITIES_REGISTRY.filter((act) => {
+    if (!isActivityEnabled(act.id)) return false;
     if (filter === 'all') return true;
     return act.type === filter;
   });

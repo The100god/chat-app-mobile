@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Image,
+  Platform,
 } from 'react-native';
 import { UIConfirmDialog } from '../UIModal';
 import { useTheme } from '../../context/ThemeContext';
@@ -27,7 +28,9 @@ import {
   Heart,
   ArrowRightLeft,
   MessageSquare,
+  Clock,
 } from 'lucide-react-native';
+import { useRoundTimer } from '../../hooks/useRoundTimer';
 
 import { MobileTicTacToeBoard } from './boards/MobileTicTacToeBoard';
 import { MobileRPSBoard } from './boards/MobileRPSBoard';
@@ -42,6 +45,8 @@ import { MobileListenBoard } from './boards/MobileListenBoard';
 import { MobileGameSelector, GAMES_REGISTRY } from './MobileGameSelector';
 import { TogetherChatBox, TogetherComment } from './TogetherChatBox';
 import { showToast } from '../Toast';
+import { useGamification } from '../../hooks/useGamification';
+import { MobileGameResultModal } from './MobileGameResultModal';
 
 const TYPE_CONFIG: Record<
   string,
@@ -72,6 +77,10 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
   const [copied, setCopied] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'leave' | 'close' | null>(null);
 
+  const partnerId = room?.participants?.find((p) => p !== userId);
+  const { gamificationState, lastResult, showResultModal, dismissResultModal } = useGamification(partnerId);
+  const { timeLeft, isLowTime, isRoundOff } = useRoundTimer(room);
+
   if (!room) return null;
 
   const config = TYPE_CONFIG[room.type] || TYPE_CONFIG.game;
@@ -79,7 +88,6 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
     ? GAMES_REGISTRY.find((g) => g.id === room.gameId)
     : undefined;
 
-  const partnerId = room.participants.find((p) => p !== userId);
   const partnerFriend = friends.find((f) => f.friendId === partnerId);
   const partnerName = partnerFriend?.username || (room.participants.length > 1 ? 'Partner' : 'Waiting...');
 
@@ -167,48 +175,86 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
     >
       {/* Compact Room Header */}
       <View style={[styles.headerBanner, { backgroundColor: config.color }]}>
-        <View style={styles.headerLeft}>
-          {gameDef ? (
-            <Image source={gameDef.iconAsset} style={styles.headerGameIcon} />
-          ) : (
-            <Text style={{ fontSize: 20 }}>{config.emoji}</Text>
-          )}
-          <Text style={styles.headerTitleText} numberOfLines={1}>
-            {gameDef ? gameDef.title : config.label}
-          </Text>
-        </View>
+        {/* Row 1: Identity & Room Meta */}
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerIdentity}>
+            {gameDef ? (
+              <Image source={gameDef.iconAsset} style={styles.headerGameIcon} />
+            ) : (
+              <Text style={{ fontSize: 20 }}>{config.emoji}</Text>
+            )}
+            <Text style={styles.headerTitleText} numberOfLines={1} ellipsizeMode="tail">
+              {gameDef ? gameDef.title : config.label}
+            </Text>
 
-        <View style={styles.headerRight}>
-          {totalUnread > 0 && (
-            <TouchableOpacity
-              style={styles.unreadChatBtn}
-              onPress={() => router.push('/(app)/(tabs)')}
-              activeOpacity={0.8}
-            >
-              <MessageSquare size={12} color="#ffffff" />
-              <Text style={styles.unreadChatText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+            {room.type === 'game' && (
+              <View style={styles.lvlBadge}>
+                <Text style={styles.lvlBadgeText}>
+                  Lvl {Number((room.state as any)?.currentLevel || 1)}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.headerActions}>
+            {totalUnread > 0 && (
+              <TouchableOpacity
+                style={styles.unreadChatBtn}
+                onPress={() => router.push('/(app)/(tabs)')}
+                activeOpacity={0.8}
+              >
+                <MessageSquare size={12} color="#ffffff" />
+                <Text style={styles.unreadChatText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.headerBtn} onPress={handleCopyRoomId} activeOpacity={0.75}>
+              <Text style={styles.roomIdMono}>#{room.roomId.slice(-6)}</Text>
+              {copied ? <Check size={12} color="#ffffff" /> : <Copy size={12} color="#ffffff" />}
             </TouchableOpacity>
-          )}
 
-          {room.type === 'game' && (
-            <TouchableOpacity
-              style={styles.headerBtn}
-              onPress={() => setIsChangingGame(!isChangingGame)}
-            >
-              <ArrowRightLeft size={13} color="#ffffff" />
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity style={styles.headerBtn} onPress={handleCopyRoomId}>
-            <Text style={styles.roomIdMono}>#{room.roomId.slice(-6)}</Text>
-            {copied ? <Check size={12} color="#ffffff" /> : <Copy size={12} color="#ffffff" />}
-          </TouchableOpacity>
-
-          <View style={styles.usersPill}>
-            <Users size={12} color="#ffffff" />
-            <Text style={styles.usersCountText}>{room.participants.length}</Text>
+            <View style={styles.usersPill}>
+              <Users size={12} color="#ffffff" />
+              <Text style={styles.usersCountText}>{room.participants.length}</Text>
+            </View>
           </View>
         </View>
+
+        {/* Row 2: Game Status & Controls (Only for game rooms) */}
+        {room.type === 'game' && (
+          <View style={styles.headerSubRow}>
+            {/* Left: Round Status / Timer */}
+            {room.participants.length < 2 ? (
+              <View style={styles.statusPill}>
+                <Clock size={11} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.statusPillText}>Waiting for partner...</Text>
+              </View>
+            ) : isRoundOff ? (
+              <View style={styles.roundOffPill}>
+                <Text style={styles.roundOffText}>🏁 Round Ended</Text>
+              </View>
+            ) : (
+              <View style={[styles.roundTimerChip, isLowTime && styles.roundTimerChipLow]}>
+                <Clock size={11} color={isLowTime ? '#ffffff' : '#fbbf24'} />
+                <Text style={[styles.roundTimerText, isLowTime && styles.roundTimerTextLow]}>
+                  {timeLeft}s
+                </Text>
+              </View>
+            )}
+
+            {/* Right: Switch Game */}
+            <TouchableOpacity
+              style={styles.switchGameBtn}
+              onPress={() => setIsChangingGame(!isChangingGame)}
+              activeOpacity={0.75}
+            >
+              <ArrowRightLeft size={12} color="#ffffff" />
+              <Text style={styles.switchGameBtnText}>
+                {isChangingGame ? 'Resume' : 'Switch Game'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Waiting for Partner Invitation Overlay */}
@@ -255,7 +301,11 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
                     selectedGameId={room.gameId}
                     userStats={room.sessionStats}
                     currentUserId={userId || undefined}
+                    partnerId={partnerId}
+                    partnerName={partnerName}
+                    gamificationState={gamificationState}
                     onSelectGame={(newGameId) => {
+                      if (!newGameId) return;
                       switchGame(newGameId);
                       setIsChangingGame(false);
                     }}
@@ -450,6 +500,15 @@ export const TogetherRoomShell: React.FC<TogetherRoomShellProps> = ({ onExit }) 
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmAction(null)}
       />
+
+      {/* Gamification Celebration & Match Result Modal */}
+      <MobileGameResultModal
+        isOpen={showResultModal}
+        result={lastResult}
+        currentUserId={userId || ''}
+        partnerName={partnerName}
+        onClose={dismissResultModal}
+      />
     </ScrollView>
   );
 };
@@ -470,31 +529,131 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
+    flexDirection: 'column',
+    gap: 8,
+    elevation: 3,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    elevation: 3,
+    width: '100%',
   },
-  headerLeft: {
+  headerIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   headerGameIcon: {
     width: 26,
     height: 26,
     resizeMode: 'contain',
+    flexShrink: 0,
   },
   headerTitleText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
+    flexShrink: 1,
   },
-  headerRight: {
+  lvlBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+    flexShrink: 0,
+  },
+  lvlBadgeText: {
+    color: '#fbbf24',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 0,
+  },
+  headerSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusPillText: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  roundOffPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  roundOffText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  roundTimerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.4)',
+  },
+  roundTimerChipLow: {
+    backgroundColor: '#ef4444',
+    borderColor: '#fca5a5',
+  },
+  roundTimerText: {
+    color: '#fbbf24',
+    fontSize: 11,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  roundTimerTextLow: {
+    color: '#ffffff',
+  },
+  switchGameBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  switchGameBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
   },
   headerBtn: {
     flexDirection: 'row',

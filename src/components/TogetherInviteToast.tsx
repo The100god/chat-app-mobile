@@ -18,6 +18,7 @@ import {
 } from '../states/States';
 import { useTogetherRoom } from '../hooks/useTogetherRoom';
 import { useTheme } from '../context/ThemeContext';
+import { useSystemConfig } from '../context/ConfigContext';
 import {
   Sparkles,
   Gamepad2,
@@ -33,6 +34,7 @@ const { width } = Dimensions.get('window');
 export default function TogetherInviteToast() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { isFeatureEnabled } = useSystemConfig();
   const [invites] = useAtom(togetherInvitesAtom);
   const [room] = useAtom(togetherRoomAtom);
   const [userId] = useAtom(userIdAtom);
@@ -40,6 +42,7 @@ export default function TogetherInviteToast() {
   const [, setPendingInvite] = useAtom(pendingTogetherInviteAtom);
   const { joinRoom, declineInvite } = useTogetherRoom();
 
+  if (!isFeatureEnabled('feature_together_hub')) return null;
   if (room) return null;
 
   const validInvites = (invites || []).filter((i) => i.hostId !== userId);

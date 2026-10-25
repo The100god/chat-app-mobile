@@ -19,7 +19,9 @@ import {
   Users,
   XCircle,
   Handshake,
+  Clock,
 } from 'lucide-react-native';
+import { useRoundTimer } from '../../../hooks/useRoundTimer';
 
 interface MobileRPSBoardProps {
   room: TogetherRoom;
@@ -59,17 +61,17 @@ export const MobileRPSBoard: React.FC<MobileRPSBoardProps> = ({
   const partnerScore = partnerId ? scores[partnerId] || 0 : 0;
 
   const sessionStats: GameStats =
-    (currentUserId &&
-      (room.sessionStats?.[`rps_${currentUserId}`] ||
-        room.sessionStats?.[currentUserId])) || {
+    (currentUserId && room.sessionStats?.[`rps_${currentUserId}`]) || {
       wins: 0,
       losses: 0,
       ties: 0,
       total: 0,
     };
 
+  const { timeLeft, isLowTime } = useRoundTimer(room);
+
   const handleSelectChoice = (choice: 'rock' | 'paper' | 'scissors') => {
-    if (status === 'round_ended') return;
+    if (status === 'round_ended' || status === 'waiting' || !partnerId) return;
     onEmit('together:rps:choice', { roomId: room.roomId, choice });
   };
 
@@ -98,9 +100,17 @@ export const MobileRPSBoard: React.FC<MobileRPSBoardProps> = ({
               source={require('../../../../assets/game-icons/rps.png')}
               style={styles.gameIcon}
             />
-            <View>
-              <Text style={[styles.gameTitle, { color: theme.foreground }]}>Rock Paper Scissors</Text>
-              <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>Round {round}</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.gameTitle, { color: theme.foreground }]} numberOfLines={1}>
+                Rock Paper Scissors
+              </Text>
+              <View style={styles.subtitleRow}>
+                <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>Round {round}</Text>
+                <View style={[styles.timerChip, isLowTime && styles.timerChipLow]}>
+                  <Clock size={10} color={isLowTime ? '#ffffff' : '#fbbf24'} />
+                  <Text style={[styles.timerText, isLowTime && styles.timerTextLow]}>{timeLeft}s</Text>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -189,6 +199,31 @@ export const MobileRPSBoard: React.FC<MobileRPSBoardProps> = ({
           </View>
         </View>
 
+        {/* Status / Guidance Banner */}
+        <View style={[styles.guidancePrompt, { backgroundColor: theme.muted, borderColor: theme.border }]}>
+          {status === 'round_ended' ? (
+            <Text style={[styles.guidanceText, { color: theme.mutedText }]}>
+              Round completed! Tap "Next Round" to play again.
+            </Text>
+          ) : status === 'waiting' || !partnerId ? (
+            <Text style={[styles.guidanceText, { color: '#f59e0b' }]}>
+              ⏳ Waiting for partner to join the room...
+            </Text>
+          ) : hasMyChoice && !hasPartnerChoice ? (
+            <Text style={[styles.guidanceText, { color: '#06b6d4' }]}>
+              🔒 Move submitted ({myChoice})! Waiting for {partnerName}...
+            </Text>
+          ) : !hasMyChoice && hasPartnerChoice ? (
+            <Text style={[styles.guidanceText, { color: '#a855f7' }]}>
+              ⚡ {partnerName} has locked their move! Make your move below:
+            </Text>
+          ) : (
+            <Text style={[styles.guidanceText, { color: theme.foreground }]}>
+              👉 Select Rock, Paper, or Scissors!
+            </Text>
+          )}
+        </View>
+
         {/* Round Result Banner */}
         {status === 'round_ended' && roundResult && (
           <View style={[styles.roundResultCard, { backgroundColor: theme.muted, borderColor: theme.border }]}>
@@ -225,17 +260,20 @@ export const MobileRPSBoard: React.FC<MobileRPSBoardProps> = ({
             { id: 'scissors', label: 'Scissors', icon: '✌️' },
           ].map((item) => {
             const isSelected = myChoice === item.id;
+            const isWaitingPartner = status === 'waiting' || !partnerId;
             return (
               <TouchableOpacity
                 key={item.id}
+                disabled={isWaitingPartner}
                 style={[
                   styles.choiceBtn,
                   { backgroundColor: theme.card, borderColor: theme.border },
                   isSelected && {
-                    borderColor: '#f43f5e',
-                    backgroundColor: 'rgba(244,63,94,0.12)',
+                    borderColor: '#06b6d4',
+                    backgroundColor: 'rgba(6,182,212,0.15)',
                     borderWidth: 2,
                   },
+                  isWaitingPartner && { opacity: 0.5 },
                 ]}
                 onPress={() => handleSelectChoice(item.id as any)}
               >
@@ -243,11 +281,16 @@ export const MobileRPSBoard: React.FC<MobileRPSBoardProps> = ({
                 <Text
                   style={[
                     styles.choiceLabel,
-                    { color: isSelected ? '#f43f5e' : theme.foreground },
+                    { color: isSelected ? '#06b6d4' : theme.foreground },
                   ]}
                 >
                   {item.label}
                 </Text>
+                {isSelected && (
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#06b6d4', marginTop: 2 }}>
+                    Locked In
+                  </Text>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -300,11 +343,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   gameIcon: {
     width: 32,
     height: 32,
     resizeMode: 'contain',
+    flexShrink: 0,
   },
   gameTitle: {
     fontSize: 13,
@@ -314,6 +360,35 @@ const styles = StyleSheet.create({
   gameSubtitle: {
     fontSize: 10,
     fontWeight: '600',
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  timerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+  },
+  timerChipLow: {
+    backgroundColor: '#ef4444',
+    borderColor: '#fca5a5',
+  },
+  timerText: {
+    color: '#fbbf24',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  timerTextLow: {
+    color: '#ffffff',
   },
   smallIconBtn: {
     padding: 6,
@@ -401,6 +476,20 @@ const styles = StyleSheet.create({
   vsText: {
     fontSize: 14,
     fontWeight: '900',
+  },
+  guidancePrompt: {
+    width: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guidanceText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   roundResultCard: {
     width: '100%',

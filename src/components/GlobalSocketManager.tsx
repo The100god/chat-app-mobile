@@ -164,8 +164,8 @@ export const GlobalSocketManager: React.FC = () => {
             ? msg.content.substring(0, 50) + '...'
             : msg.content
           : msg.media && msg.media.length > 0
-          ? 'Sent a photo/media 📷'
-          : 'New message';
+            ? 'Sent a photo/media 📷'
+            : 'New Chugli';
 
         const sIdStr = String(senderId);
         // Check if user is currently in direct chat with this friend
@@ -212,8 +212,8 @@ export const GlobalSocketManager: React.FC = () => {
             ? msg.content.substring(0, 40) + '...'
             : msg.content
           : msg.media && msg.media.length > 0
-          ? 'Sent a photo/media 📷'
-          : 'Sent an attachment 📎';
+            ? 'Sent a photo/media 📷'
+            : 'Sent an attachment 📎';
 
         const gIdStr = groupId ? String(groupId) : null;
         const isCurrentlyInGroup =

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useSystemConfig } from '../context/ConfigContext';
 import { useAtom } from 'jotai';
 import { activeWorkspaceAtom, unreadCountAtom, groupUnreadTotalAtom } from '../states/States';
 import { Sparkles, MessageSquare } from 'lucide-react-native';
@@ -10,6 +11,8 @@ import { useRouter, usePathname } from 'expo-router';
 export const Header: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { isFeatureEnabled } = useSystemConfig();
+  const isTogetherEnabled = isFeatureEnabled('feature_together_hub');
   const [activeWorkspace, setActiveWorkspace] = useAtom(activeWorkspaceAtom);
   const [totalUnread] = useAtom(unreadCountAtom);
   const router = useRouter();
@@ -17,7 +20,18 @@ export const Header: React.FC = () => {
 
   const isTogether = pathname ? pathname.includes('together') : activeWorkspace === 'together';
 
+  // If Together Hub is disabled by admin while user is on together workspace or view, switch back to chat
+  useEffect(() => {
+    if (!isTogetherEnabled && (isTogether || activeWorkspace === 'together')) {
+      setActiveWorkspace('chat');
+      if (pathname && pathname.includes('together')) {
+        router.replace('/(app)/(tabs)');
+      }
+    }
+  }, [isTogetherEnabled, isTogether, activeWorkspace, pathname, router, setActiveWorkspace]);
+
   const toggleWorkspace = () => {
+    if (!isTogetherEnabled) return;
     if (isTogether) {
       setActiveWorkspace('chat');
       router.push('/(app)/(tabs)');
@@ -27,11 +41,15 @@ export const Header: React.FC = () => {
     }
   };
 
+  const isDark = theme.background !== '#ffffff';
+  const headerBg = isDark ? 'rgba(15, 23, 42, 0.75)' : 'rgba(255, 255, 255, 0.85)';
+  const headerBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+
   return (
     <View
       style={[
         styles.headerContainer,
-        { backgroundColor: theme.card, borderBottomColor: theme.border },
+        { backgroundColor: headerBg, borderBottomColor: headerBorder },
       ]}
     >
       {/* Left Section: Profile Image (opens Profile) & Chugli Title with Logo (opens Home) */}
@@ -68,42 +86,47 @@ export const Header: React.FC = () => {
 
       {/* Right Section: Workspace Switcher Button */}
       <View style={styles.rightSection}>
-        <TouchableOpacity
-          style={[
-            styles.workspaceToggle,
-            {
-              backgroundColor: 'rgba(236, 72, 153, 0.15)',
-              borderColor: '#ec4899',
-            },
-            isTogether && { backgroundColor: theme.muted, borderColor: theme.border },
-          ]}
-          onPress={toggleWorkspace}
-          activeOpacity={0.8}
-        >
-          {isTogether ? (
-            <View style={{ position: 'relative' }}>
-              <MessageSquare size={16} color={theme.accent} />
-              {totalUnread > 0 && (
-                <View style={styles.badgeCircle}>
-                  <Text style={styles.badgeText}>
-                    {totalUnread > 99 ? '99+' : totalUnread}
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            <Sparkles size={16} color="#ec4899" />
-          )}
-          <Text
+        {isTogetherEnabled && (
+          <TouchableOpacity
             style={[
-              styles.togetherTextActive,
-              { color: theme.foreground },
-              isTogether && styles.workspaceText,
+              styles.workspaceToggle,
+              {
+                backgroundColor: 'rgba(236, 72, 153, 0.15)',
+                borderColor: '#ec4899',
+              },
+              isTogether && {
+                backgroundColor: 'rgba(139, 92, 246, 0.18)',
+                borderColor: 'rgba(139, 92, 246, 0.45)',
+              },
             ]}
+            onPress={toggleWorkspace}
+            activeOpacity={0.8}
           >
-            {isTogether ? 'Chat' : 'Together'}
-          </Text>
-        </TouchableOpacity>
+            {isTogether ? (
+              <View style={{ position: 'relative' }}>
+                <MessageSquare size={16} color={theme.accent} />
+                {totalUnread > 0 && (
+                  <View style={styles.badgeCircle}>
+                    <Text style={styles.badgeText}>
+                      {totalUnread > 99 ? '99+' : totalUnread}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <Sparkles size={16} color="#ec4899" />
+            )}
+            <Text
+              style={[
+                isTogether
+                  ? [styles.workspaceText, { color: theme.accent }]
+                  : [styles.togetherTextActive, { color: '#ec4899' }],
+              ]}
+            >
+              {isTogether ? 'Chat' : 'Together'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

@@ -8,6 +8,7 @@ import {
   Image,
   RefreshControl,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
@@ -173,16 +174,18 @@ export default function ChatsTab() {
 
               <View style={styles.chatInfo}>
                 <View style={styles.chatHeaderRow}>
-                  <Text
-                    style={[
-                      styles.username,
-                      { color: theme.foreground },
-                      hasUnread && styles.unreadUsername,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.username} {isSelf ? '(You)' : ''}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                    <Text
+                      style={[
+                        styles.username,
+                        { color: theme.foreground },
+                        hasUnread && styles.unreadUsername,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.name || item.username} {isSelf ? '(You)' : ''}
+                    </Text>
+                  </View>
                   <Text
                     style={[
                       styles.timeStatusText,
@@ -203,7 +206,7 @@ export default function ChatsTab() {
                     ]}
                     numberOfLines={1}
                   >
-                    {hasUnread ? 'New message' : isOnline ? 'Tap to Chugli' : 'No Messages'}
+                    {hasUnread ? 'New Chugli' : isOnline ? 'Tap to Chugli' : 'No Chugli'}
                   </Text>
 
                   {hasUnread ? (

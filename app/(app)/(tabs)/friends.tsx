@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAtom } from 'jotai';
@@ -24,6 +25,7 @@ import { AnimatedEmojiBackground } from '../../../src/components/AnimatedEmojiBa
 interface FriendItem {
   friendId: string;
   username: string;
+  name?: string;
   profilePic?: string;
   unreadMessagesCount?: number;
 }
@@ -31,12 +33,14 @@ interface FriendItem {
 interface UserSearchResult {
   _id: string;
   username: string;
+  name?: string;
   profilePic?: string;
 }
 
 interface FriendRequestItem {
   _id: string;
   username: string;
+  name?: string;
   email?: string;
   profilePic?: string;
 }
@@ -310,6 +314,7 @@ export default function FriendsScreen() {
   const openChatWithFriend = (friend: FriendItem) => {
     setSelectedFriend({
       friendId: friend.friendId,
+      name: friend.name,
       username: friend.username,
       profilePic: friend.profilePic || '',
       unreadMessagesCount: friend.unreadMessagesCount || 0,
@@ -436,7 +441,7 @@ export default function FriendsScreen() {
                     </View>
                     <View style={styles.userInfo}>
                       <Text style={[styles.userName, { color: theme.foreground }]}>
-                        {item.username} {item.friendId === userId ? '(You)' : ''}
+                        {item.name || item.username} {item.friendId === userId ? '(You)' : ''}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
                         {isOnline && (
@@ -488,7 +493,7 @@ export default function FriendsScreen() {
             <Search size={18} color={theme.mutedText} style={{ marginRight: 8 }} />
             <TextInput
               style={[styles.searchInput, { color: theme.foreground }]}
-              placeholder="Search by username..."
+              placeholder="Search by name..."
               placeholderTextColor={theme.mutedText}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -534,10 +539,7 @@ export default function FriendsScreen() {
                     )}
                     <View style={styles.userInfo}>
                       <Text style={[styles.userName, { color: theme.foreground }]}>
-                        {item.username}
-                      </Text>
-                      <Text style={[styles.userEmail, { color: theme.mutedText }]}>
-                        Registered user
+                        {item.name || item.username}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -646,10 +648,7 @@ export default function FriendsScreen() {
                     )}
                     <View style={styles.userInfo}>
                       <Text style={[styles.userName, { color: theme.foreground }]}>
-                        {item.username || 'User'}
-                      </Text>
-                      <Text style={[styles.userEmail, { color: theme.mutedText }]}>
-                        {item.email || 'Wants to connect with you'}
+                        {item.name || item.username || 'User'}
                       </Text>
                     </View>
                     <View style={styles.actionRow}>
@@ -698,10 +697,10 @@ export default function FriendsScreen() {
                   )}
                   <View style={styles.userInfo}>
                     <Text style={[styles.userName, { color: theme.foreground }]}>
-                      {item.username || 'User'}
+                      {item.name || item.username || 'User'}
                     </Text>
                     <Text style={[styles.userEmail, { color: '#f59e0b' }]}>
-                      Pending approval...
+                      Pending response...
                     </Text>
                   </View>
                   <TouchableOpacity

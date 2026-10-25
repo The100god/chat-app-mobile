@@ -4,12 +4,14 @@ import { MessageSquare, Users, Gamepad2, UserPlus, Settings } from 'lucide-react
 import { useAtom } from 'jotai';
 import { friendUnreadTotalAtom, groupUnreadTotalAtom, friendRequestsCountAtom } from '../../../src/states/States';
 import { useTheme } from '../../../src/context/ThemeContext';
+import { useSystemConfig } from '../../../src/context/ConfigContext';
 
 export default function TabsLayout() {
   const [friendUnreadTotal] = useAtom(friendUnreadTotalAtom);
   const [groupUnreadTotal] = useAtom(groupUnreadTotalAtom);
   const [friendRequestsCount] = useAtom(friendRequestsCountAtom);
   const { theme } = useTheme();
+  const { isFeatureEnabled } = useSystemConfig();
 
   return (
     <Tabs
@@ -44,6 +46,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="groups"
         options={{
+          href: isFeatureEnabled('feature_group_chat') ? undefined : null,
           title: 'Groups',
           tabBarBadge: groupUnreadTotal > 0 ? groupUnreadTotal : undefined,
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
@@ -54,6 +57,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="together"
         options={{
+          href: isFeatureEnabled('feature_together_hub') ? undefined : null,
           title: 'Together',
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <Gamepad2 size={size || 22} color={color} />

@@ -79,9 +79,7 @@ export const MobileMemoryMatchBoard: React.FC<MobileMemoryMatchBoardProps> = ({
   const partnerScore = partnerId ? scores[partnerId] || 0 : 0;
 
   const sessionStats: GameStats =
-    (currentUserId &&
-      (room.sessionStats?.[`memory_${currentUserId}`] ||
-        room.sessionStats?.[currentUserId])) || {
+    (currentUserId && room.sessionStats?.[`memory_${currentUserId}`]) || {
       wins: 0,
       losses: 0,
       ties: 0,
@@ -129,9 +127,11 @@ export const MobileMemoryMatchBoard: React.FC<MobileMemoryMatchBoardProps> = ({
               source={require('../../../../assets/game-icons/memory.png')}
               style={styles.gameIcon}
             />
-            <View>
-              <Text style={[styles.gameTitle, { color: theme.foreground }]}>Memory Match</Text>
-              <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.gameTitle, { color: theme.foreground }]} numberOfLines={1}>
+                Memory Match
+              </Text>
+              <Text style={[styles.gameSubtitle, { color: theme.mutedText }]} numberOfLines={1}>
                 {status === 'playing'
                   ? isMyTurn
                     ? 'Your Turn to Flip!'
@@ -376,11 +376,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   gameIcon: {
     width: 32,
     height: 32,
     resizeMode: 'contain',
+    flexShrink: 0,
   },
   gameTitle: {
     fontSize: 13,

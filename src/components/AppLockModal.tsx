@@ -12,21 +12,35 @@ import {
 } from 'react-native';
 import { useAtom } from 'jotai';
 import { isAppLockedAtom } from '../states/States';
-import { getLockPin, getLockTimeout } from '../utils/authStorage';
 import { useTheme } from '../context/ThemeContext';
-import { Lock } from 'lucide-react-native';
+import { useSystemConfig } from '../context/ConfigContext';
+import { getLockPin, getLockTimeout } from '../utils/authStorage';
+import { Lock, Eye, EyeOff } from 'lucide-react-native';
 
 export const AppLockModal: React.FC = () => {
   const [isLocked, setIsLocked] = useAtom(isAppLockedAtom);
   const { theme } = useTheme();
+  const { isFeatureEnabled } = useSystemConfig();
   const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
+    if (!isFeatureEnabled('feature_app_lock') && isLocked) {
+      setIsLocked(false);
+    }
+  }, [isFeatureEnabled, isLocked]);
+
+  useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (!isFeatureEnabled('feature_app_lock')) {
+        setIsLocked(false);
+        return;
+      }
+
       if (
         appStateRef.current.match(/active/) &&
         nextAppState.match(/inactive|background/)
@@ -86,7 +100,7 @@ export const AppLockModal: React.FC = () => {
   };
 
   return (
-    <Modal visible={isLocked} animationType="fade" transparent={false}>
+    <Modal visible={isLocked && isFeatureEnabled('feature_app_lock')} animationType="fade" transparent={false}>
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={[styles.iconCircle, { backgroundColor: `${theme.accent}20` }]}>
@@ -97,26 +111,39 @@ export const AppLockModal: React.FC = () => {
             Enter your 4-digit PIN to continue
           </Text>
 
-          <TextInput
-            style={[
-              styles.pinInput,
-              {
-                backgroundColor: theme.input,
-                borderColor: theme.border,
-                color: theme.foreground,
-              },
-            ]}
-            value={pin}
-            onChangeText={(text: string) => {
-              setPin(text);
-              setError('');
-            }}
-            placeholder="••••"
-            placeholderTextColor={theme.mutedText}
-            keyboardType="number-pad"
-            maxLength={4}
-            secureTextEntry
-          />
+          <View style={styles.pinInputRow}>
+            <TextInput
+              style={[
+                styles.pinInput,
+                {
+                  backgroundColor: theme.input,
+                  borderColor: theme.border,
+                  color: theme.foreground,
+                },
+              ]}
+              value={pin}
+              onChangeText={(text: string) => {
+                setPin(text);
+                setError('');
+              }}
+              placeholder="••••"
+              placeholderTextColor={theme.mutedText}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry={!showPin}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPin((prev) => !prev)}
+              style={styles.pinEyeBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              {showPin ? (
+                <EyeOff size={20} color={theme.accent} />
+              ) : (
+                <Eye size={20} color={theme.mutedText} />
+              )}
+            </TouchableOpacity>
+          </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -170,15 +197,26 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
+  pinInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginBottom: 16,
+    position: 'relative',
+  },
   pinInput: {
-    width: '80%',
+    width: '75%',
     height: 54,
     borderRadius: 14,
-    fontSize: 28,
+    fontSize: 24,
     textAlign: 'center',
-    letterSpacing: 12,
+    letterSpacing: 10,
     borderWidth: 1,
-    marginBottom: 16,
+  },
+  pinEyeBtn: {
+    marginLeft: 10,
+    padding: 8,
   },
   errorText: {
     color: '#ef4444',

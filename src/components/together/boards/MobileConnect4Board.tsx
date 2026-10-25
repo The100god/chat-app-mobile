@@ -21,7 +21,9 @@ import {
   Handshake,
   ArrowDown,
   ArrowRightLeft,
+  Clock,
 } from 'lucide-react-native';
+import { useRoundTimer } from '../../../hooks/useRoundTimer';
 
 interface MobileConnect4BoardProps {
   room: TogetherRoom;
@@ -81,14 +83,14 @@ export const MobileConnect4Board: React.FC<MobileConnect4BoardProps> = ({
   const isMyTurn = status === 'playing' && currentTurn === playerSymbol;
 
   const sessionStats: GameStats =
-    (currentUserId &&
-      (room.sessionStats?.[`connect4_${currentUserId}`] ||
-        room.sessionStats?.[currentUserId])) || {
+    (currentUserId && room.sessionStats?.[`connect4_${currentUserId}`]) || {
       wins: 0,
       losses: 0,
       ties: 0,
       total: 0,
     };
+
+  const { timeLeft, isLowTime } = useRoundTimer(room);
 
   const handleDropToken = (colIndex: number) => {
     if (!isMyTurn) return;
@@ -137,15 +139,25 @@ export const MobileConnect4Board: React.FC<MobileConnect4BoardProps> = ({
               source={require('../../../../assets/game-icons/connect4.png')}
               style={styles.gameIcon}
             />
-            <View>
-              <Text style={[styles.gameTitle, { color: theme.foreground }]}>Connect 4</Text>
-              <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>
-                {status === 'playing'
-                  ? isMyTurn
-                    ? 'Your Turn!'
-                    : "Partner's Turn"
-                  : '4-in-a-Row Duel'}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.gameTitle, { color: theme.foreground }]} numberOfLines={1}>
+                Connect 4
               </Text>
+              <View style={styles.subtitleRow}>
+                <Text style={[styles.gameSubtitle, { color: theme.mutedText }]}>
+                  {status === 'playing'
+                    ? isMyTurn
+                      ? 'Your Turn!'
+                      : "Partner's Turn"
+                    : '4-in-a-Row Duel'}
+                </Text>
+                {status === 'playing' && (
+                  <View style={[styles.timerChip, isLowTime && styles.timerChipLow]}>
+                    <Clock size={10} color={isLowTime ? '#ffffff' : '#fbbf24'} />
+                    <Text style={[styles.timerText, isLowTime && styles.timerTextLow]}>{timeLeft}s</Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
 
@@ -453,11 +465,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   gameIcon: {
     width: 32,
     height: 32,
     resizeMode: 'contain',
+    flexShrink: 0,
   },
   gameTitle: {
     fontSize: 13,
@@ -467,6 +482,35 @@ const styles = StyleSheet.create({
   gameSubtitle: {
     fontSize: 10,
     fontWeight: '600',
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  timerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+  },
+  timerChipLow: {
+    backgroundColor: '#ef4444',
+    borderColor: '#fca5a5',
+  },
+  timerText: {
+    color: '#fbbf24',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  timerTextLow: {
+    color: '#ffffff',
   },
   smallIconBtn: {
     padding: 6,

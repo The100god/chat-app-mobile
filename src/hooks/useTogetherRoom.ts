@@ -112,9 +112,22 @@ export function useTogetherRoom() {
       }
     };
 
-    const handleError = (data: { message: string }) => {
-      console.error('Together error:', data.message);
-      showToast(data.message || 'An error occurred with Together room', 'error');
+    const handleError = (data: { message?: string; code?: string }) => {
+      console.error('Together error:', data?.message);
+      const msg = data?.message || '';
+      if (
+        msg.toLowerCase().includes('room not found') ||
+        data?.code === 'ROOM_EXPIRED' ||
+        msg.toLowerCase().includes('not found')
+      ) {
+        setRoom(null);
+        showToast(
+          'Connection to partner ended due to time limit or inactivity. Invite your partner to start a fresh game!',
+          'info'
+        );
+        return;
+      }
+      showToast(msg || 'An error occurred with Together room', 'error');
     };
 
     const handleInviteReceived = (rawInvite: {

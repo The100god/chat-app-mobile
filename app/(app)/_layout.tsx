@@ -20,7 +20,12 @@ export default function AppLayout() {
       <AnimatedEmojiBackground />
       <GlobalSocketManager />
       {!isDetailScreen && (
-        <View style={{ paddingTop: Math.max(insets.top, 12), backgroundColor: theme.card }}>
+        <View
+          style={{
+            paddingTop: Math.max(insets.top, 12),
+            backgroundColor: theme.background === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(15, 23, 42, 0.75)',
+          }}
+        >
           <Header />
         </View>
       )}
